@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const CHAVE_AVALIACOES = "starcine_avaliacoes"; // mesma chave usada no script.js da home
   const CHAVE_PERFIL = "starcine_perfil";
+  const CHAVE_USUARIO = "starcine_usuario"; // mesma chave que o login do Google usa no script.js
 
   const perfilFoto = document.getElementById("perfilFoto");
   const btnTrocarFoto = document.getElementById("btnTrocarFoto");
@@ -21,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const listaAvaliacoes = document.getElementById("listaAvaliacoes");
   const logoHome = document.getElementById("logoHome");
   const MESES = ["jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez."];
-  
+
 if (logoHome) {
   logoHome.addEventListener("click", () => {
     window.location.href = "/index.html";
@@ -32,8 +33,21 @@ if (logoHome) {
     return `${String(d.getDate()).padStart(2, "0")} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
   }
 
+  /* ===== USUÁRIO LOGADO PELO GOOGLE (lido da mesma chave do script.js) ===== */
+  function carregarUsuarioGoogle() {
+    try {
+      return JSON.parse(localStorage.getItem(CHAVE_USUARIO));
+    } catch {
+      return null;
+    }
+  }
+
   /* ===== PERFIL (nome, foto, cor do card, data em que criou a conta) =====
-     Guardado em "starcine_perfil": { nome, foto (base64), cor, membroDesde (ISO) }
+     Guardado em "starcine_perfil": { nome, foto (base64), cor, membroDesde (ISO),
+     nomeManual, fotoManual }
+     "nomeManual"/"fotoManual" ficam true assim que a pessoa edita esses campos
+     manualmente na página de perfil — a partir daí paramos de sobrescrever
+     com os dados do Google automaticamente.
      Na primeira vez que essa página é aberta, a data de "membro desde" é
      gravada e nunca mais muda. */
   function carregarPerfil() {
@@ -44,14 +58,36 @@ if (logoHome) {
       perfil = null;
     }
 
+    const usuarioGoogle = carregarUsuarioGoogle();
+
     if (!perfil) {
       perfil = {
-        nome: "Usuário",
-        foto: null,
+        nome: usuarioGoogle ? (usuarioGoogle.nomeEditado || usuarioGoogle.primeiroNome) : "Usuário",
+        foto: usuarioGoogle ? usuarioGoogle.foto : null,
         cor: "#1c1a17",
-        membroDesde: new Date().toISOString()
+        membroDesde: new Date().toISOString(),
+        nomeManual: false,
+        fotoManual: false
       };
       localStorage.setItem(CHAVE_PERFIL, JSON.stringify(perfil));
+      return perfil;
+    }
+
+    // perfil já existia: sincroniza com o Google só nos campos que a
+    // pessoa ainda não editou manualmente
+    if (usuarioGoogle) {
+      let mudou = false;
+      const nomeGoogle = usuarioGoogle.nomeEditado || usuarioGoogle.primeiroNome;
+
+      if (!perfil.nomeManual && nomeGoogle && perfil.nome !== nomeGoogle) {
+        perfil.nome = nomeGoogle;
+        mudou = true;
+      }
+      if (!perfil.fotoManual && usuarioGoogle.foto && perfil.foto !== usuarioGoogle.foto) {
+        perfil.foto = usuarioGoogle.foto;
+        mudou = true;
+      }
+      if (mudou) localStorage.setItem(CHAVE_PERFIL, JSON.stringify(perfil));
     }
 
     return perfil;
@@ -88,6 +124,7 @@ if (logoHome) {
       const leitor = new FileReader();
       leitor.onload = () => {
         perfil.foto = leitor.result; // salva a imagem em base64
+        perfil.fotoManual = true; // a partir daqui não sobrescreve mais com a foto do Google
         salvarPerfil(perfil);
         perfilFoto.src = perfil.foto;
       };
@@ -107,6 +144,7 @@ if (logoHome) {
     btnSalvarPerfil.addEventListener("click", () => {
       perfil.nome = inputNome.value.trim() || "Usuário";
       perfil.cor = inputCor.value;
+      perfil.nomeManual = true; // a partir daqui não sobrescreve mais com o nome do Google
       salvarPerfil(perfil);
       aplicarPerfilNaTela();
       painelEditar.classList.remove("ativo");
