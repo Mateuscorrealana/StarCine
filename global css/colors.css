@@ -1,0 +1,4 @@
+:root {
+    --gradient-matte-black: linear-gradient(135deg, #2c2c2c, #111111);
+    --gradient-linear: linear-gradient(135deg, #485058 0%, #000000 100%);
+}

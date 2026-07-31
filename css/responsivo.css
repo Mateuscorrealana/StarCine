@@ -1,0 +1,452 @@
+/* ==========================================================================
+   StarCine — CSS GLOBAL RESPONSIVO (v2)
+   Importar por último, depois de index.css / perfil.css / colors.css / fonts.css:
+   <link rel="stylesheet" href="/css/responsivo.css">
+
+   Este arquivo:
+   1) Reseta o header (antes usava position:absolute com valores fixos tipo
+      "right:340px", que quebra em qualquer tela que não seja a exata do
+      Figma). Agora é flexbox de verdade, funciona em qualquer largura.
+   2) Adiciona o menu hambúrguer mobile (a lógica de JS já existe em
+      script.js, procurando #btnMenuMobile e #headerMenu — só faltava o
+      HTML e o CSS, que é o que este arquivo resolve).
+   3) Corrige o footer no mobile.
+   ========================================================================== */
+
+/* =========================================================
+   HEADER — reset base (vale para TODAS as larguras)
+   ========================================================= */
+.header {
+  position: relative;
+  z-index: 500;
+}
+
+.header__container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.header__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* remove os deslocamentos fixos que jogavam a logo pra fora da tela */
+.header__logo,
+.header__star {
+  position: static;
+  right: 0;
+}
+
+/* o menu (busca + editar perfil + usuário) vira um único bloco flexível */
+.header__menu {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.header__search {
+  position: relative;
+  right: 0;
+  flex: 1;
+  max-width: 700px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header__search-icon {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.header__search input {
+  padding-left: 2.6rem;
+}
+
+.editar-perfil {
+  flex-shrink: 0;
+}
+
+.editar-perfil button {
+  position: static;
+  white-space: nowrap;
+}
+
+.header__user {
+  position: static;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   HAMBÚRGUER — escondido no desktop
+   ========================================================= */
+.header__hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 26px;
+  height: 18px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  z-index: 600;
+}
+
+.header__hamburger span {
+  display: block;
+  height: 2px;
+  width: 100%;
+  background: #E7A33E;
+  border-radius: 2px;
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+
+.header__hamburger.aberto span:nth-child(1) {
+  transform: translateY(8px) rotate(45deg);
+}
+
+.header__hamburger.aberto span:nth-child(2) {
+  opacity: 0;
+}
+
+.header__hamburger.aberto span:nth-child(3) {
+  transform: translateY(-8px) rotate(-45deg);
+}
+
+/* =========================================================
+   1200px — catálogo com uma coluna a menos
+   ========================================================= */
+@media (max-width: 1200px) {
+  .catalogo__grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* =========================================================
+   1024px — banner menor, footer 3 colunas
+   ========================================================= */
+@media (max-width: 1024px) {
+  .card-principal {
+    height: 380px;
+  }
+
+  .dots {
+    bottom: 160px;
+  }
+
+  .footer__container {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* =========================================================
+   880px — MENU VIRA HAMBÚRGUER
+   ========================================================= */
+@media (max-width: 880px) {
+  .header__hamburger {
+    display: flex;
+  }
+
+  .header__menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.9rem;
+    background: #151617;
+    border-top: 1px solid #2a2a2a;
+    padding: 1.2rem 1.5rem 1.5rem;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: max-height 0.3s ease, opacity 0.2s ease;
+  }
+
+  .header__menu.aberto {
+    max-height: 400px;
+    opacity: 1;
+    pointer-events: auto;
+    overflow: visible;
+  }
+
+  .header__search {
+    max-width: none;
+    width: 100%;
+  }
+
+  .editar-perfil button {
+    width: 100%;
+  }
+
+  .header__user {
+    justify-content: center;
+    padding-top: 0.6rem;
+    border-top: 1px solid #2a2a2a;
+  }
+
+  .catalogo__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* =========================================================
+   768px — banner menor, toolbar do catálogo empilha
+   ========================================================= */
+@media (max-width: 768px) {
+  .card-principal {
+    height: 300px;
+  }
+
+  .dots {
+    bottom: 110px;
+  }
+
+  .catalogo__toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .catalogo__filtros {
+    width: 100%;
+  }
+
+  .catalogo__select {
+    flex: 1;
+  }
+
+  .catalogo__contador {
+    align-self: flex-end;
+  }
+
+  .explorar__titulo {
+    font-size: 1.2rem;
+  }
+
+  .modal__conteudo {
+    max-width: 90%;
+  }
+
+  .perfil-bio__stats {
+    gap: 1.6rem;
+  }
+
+  .perfil-bio {
+    margin: 1.5rem;
+    padding: 1.5rem;
+  }
+
+  .perfil-editar-painel {
+    margin: -1rem 1.5rem 2rem;
+  }
+
+  .perfil-avaliacoes {
+    padding: 0 1.5rem;
+  }
+}
+
+/* =========================================================
+   600px — ajustes finos de header, banner, modal, footer
+   ========================================================= */
+@media (max-width: 600px) {
+  .header__container {
+    padding: 0 1rem;
+  }
+
+  .header__menu {
+    padding: 1rem 1rem 1.4rem;
+  }
+
+  .header__search input {
+    font-size: 0.85rem;
+  }
+
+  .card-principal {
+    height: 220px;
+  }
+
+  .dots {
+    bottom: 70px;
+  }
+
+  .btn {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .catalogo {
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+
+  .catalogo__titulo {
+    font-size: 1.6rem;
+  }
+
+  .catalogo__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .explorar {
+    padding: 0 1rem;
+    margin: 2rem auto 3rem;
+  }
+
+  .modal__poster {
+    width: 160px;
+    margin: 0 auto;
+  }
+
+  /* ===== FOOTER — empilhado e centralizado no mobile ===== */
+  .footer {
+    padding: 2.5rem 1.2rem 0;
+  }
+
+  .footer__container {
+    grid-template-columns: 1fr;
+    gap: 2.2rem;
+    text-align: center;
+  }
+
+  .footer__brand {
+    align-items: center;
+    margin-right: 0;
+  }
+
+  .footer__logo {
+    margin-right: 0;
+  }
+
+  .footer__coluna a {
+    margin-bottom: 0.5rem;
+  }
+
+  .footer__redes {
+    justify-content: center;
+  }
+
+  .footer__bottom {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.4rem;
+  }
+
+  .perfil-bio__foto {
+    width: 100px;
+    height: 100px;
+  }
+
+  .avaliacao-item {
+    gap: 0.8rem;
+  }
+
+  .avaliacao-item__poster {
+    width: 70px;
+    height: 100px;
+  }
+}
+
+/* =========================================================
+   480px — telas de celular pequenas
+   ========================================================= */
+@media (max-width: 480px) {
+  .catalogo__filtros {
+    gap: 0.4rem;
+  }
+
+  .filtro {
+    padding: 0.4rem 0.9rem;
+    font-size: 0.8rem;
+  }
+
+  .catalogo__select {
+    font-size: 0.8rem;
+    padding: 0.4rem 1.8rem 0.4rem 0.8rem;
+  }
+
+  .card-principal {
+    height: 180px;
+  }
+
+  .dots {
+    bottom: 55px;
+  }
+
+  .modal__conteudo {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .modal__titulo {
+    font-size: 1.1rem;
+  }
+
+  .estrelas {
+    font-size: 1.5rem;
+  }
+
+  .footer__coluna h4 {
+    margin-bottom: 0.6rem;
+  }
+
+  .perfil-bio__saudacao {
+    font-size: 1.15rem;
+  }
+
+  .perfil-bio__stat-numero {
+    font-size: 1.3rem;
+  }
+
+  .perfil-editar-painel input[type="text"] {
+    max-width: 100%;
+  }
+
+  .avaliacao-item__data {
+    font-size: 0.7rem;
+  }
+}
+
+/* =========================================================
+   380px — telas muito pequenas (iPhone SE etc.)
+   ========================================================= */
+@media (max-width: 380px) {
+  .header__search input {
+    padding-left: 2.4rem;
+    padding-right: 0.6rem;
+  }
+
+  .header__search-icon {
+    left: 0.6rem;
+  }
+
+  .btn-voltar-topo {
+    width: 38px;
+    height: 38px;
+    font-size: 1.1rem;
+  }
+
+  .perfil-bio__foto {
+    width: 84px;
+    height: 84px;
+  }
+}

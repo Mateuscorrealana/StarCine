@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="shortcut icon" href="/src/assets/images/StarCine.svg" type="image/x-icon">
+  <link rel="stylesheet" href="/css/index.css">
+  <link rel="stylesheet" href="/global css/colors.css">
+  <link rel="stylesheet" href="/global css/fonts.css">
+  <link rel="stylesheet" href="/css/responsivo.css">
+  <link rel="icon" type="image/png" href="/svgs/Star 3.svg">
+  <title>StarCine - Sua plataforma de streaming favorita</title>
+</head>
+
+<body>
+  <header class="header">
+    <div class="header__container">
+      <div class="header__brand" id="logoReload">
+        <img src="/svgs/StarCine.svg" alt="Star Cine" class="header__logo" />
+        <img src="/svgs/Star 3.svg" alt="Estrela" class="header__star" />
+      </div>
+
+      <button class="header__hamburger" id="btnMenuMobile" aria-label="Abrir menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
+      <div class="header__menu" id="headerMenu">
+        <div class="header__search">
+          <div class="header__search-icon">
+            <img src="/svgs/search.svg" alt="Ícone de pesquisa" class="header__search-img" />
+          </div>
+          <input type="text" placeholder="Busque por títulos, diretores ou gêneros..." class="header__search-input" />
+        </div>
+
+        <div class="editar-perfil">
+          <button id="btnIrParaPerfil">
+            Editar Perfil
+          </button>
+        </div>
+
+        <div class="header__user" id="headerUser">
+          <img src="/svgs/user-icon.svg" alt="Ícone de usuário" class="header__user-img" id="userAvatar" />
+          <span class="header__user-nome" id="userNome"></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="modal-login" id="modalLogin">
+    <div class="modal-login__overlay" id="modalLoginOverlay"></div>
+    <div class="modal-login__conteudo">
+      <button class="modal-login__fechar" id="modalLoginFechar" aria-label="Fechar">&times;</button>
+      <p class="modal-login__titulo">Entrar no StarCine</p>
+      <div id="googleButtonContainer" class="modal-login__botao"></div>
+    </div>
+  </div>
+
+  <section class="principal">
+    <div class="card-principal">
+      <img src="/img-principal/img-principal.png" alt="Banner" class="card-principal__img" id="imgPrincipal">
+      <button class="btn prev" id="btnPrev">&#10094;</button>
+      <button class="btn next" id="btnNext">&#10095;</button>
+    </div>
+    <div class="dots" id="dots">
+      <span class="active" data-index="0"></span>
+      <span data-index="1"></span>
+      <span data-index="2"></span>
+      <span data-index="3"></span>
+    </div>
+  </section>
+
+  <section class="catalogo">
+    <h2 class="catalogo__titulo">Confira nosso catálogo</h2>
+    <p class="catalogo__subtitulo">Filmes e séries avaliados pela comunidade</p>
+
+    <div class="catalogo__toolbar">
+      <div class="catalogo__filtros">
+        <button class="filtro filtro--ativo" data-filtro="todo">Tudo</button>
+        <button class="filtro" data-filtro="filme">Filmes</button>
+        <button class="filtro" data-filtro="serie">Séries</button>
+
+        <select class="catalogo__select" id="selectGenero">
+          <option value="todos">Todos os gêneros</option>
+        </select>
+
+        <select class="catalogo__select" id="selectOrdem">
+          <option value="recentes">Mais recentes</option>
+          <option value="antigos">Mais antigos</option>
+          <option value="avaliados">Melhor avaliados</option>
+        </select>
+      </div>
+
+      <span class="catalogo__contador" id="contadorTitulos">20 Títulos</span>
+    </div>
+
+    <div class="catalogo__grid" id="grid-catalogo"></div>
+  </section>
+
+  <section class="explorar">
+    <h2 class="explorar__titulo">Explorar filmes e séries</h2>
+
+    <div class="explorar__carrossel-wrap">
+      <div class="explorar__carrossel" id="explorarCarrossel"></div>
+    </div>
+
+    <div class="explorar__controles">
+      <button class="explorar__btn" id="explorarPrev" aria-label="Anterior">&#8592;</button>
+      <button class="explorar__btn explorar__btn--ativo" id="explorarNext" aria-label="Próximo">&#8594;</button>
+    </div>
+  </section>
+
+  <div class="modal" id="modal">
+    <div class="modal__overlay" id="modalOverlay"></div>
+    <div class="modal__conteudo">
+      <button class="modal__fechar" id="modalFechar">&times;</button>
+      <img src="" alt="" class="modal__poster" id="modalPoster">
+      <div class="modal__info">
+        <h2 class="modal__titulo" id="modalTitulo"></h2>
+        <p class="modal__meta" id="modalMeta"></p>
+        <p class="modal__descricao" id="modalDescricao"></p>
+
+        <div class="modal__avaliacao">
+          <p class="modal__avaliacao-titulo">Sua avaliação</p>
+          <div class="estrelas" id="estrelas">
+            <span data-valor="1">★</span>
+            <span data-valor="2">★</span>
+            <span data-valor="3">★</span>
+            <span data-valor="4">★</span>
+            <span data-valor="5">★</span>
+          </div>
+          <textarea id="modalComentario" class="modal__comentario"
+            placeholder="Escreva sua opinião (opcional)..."></textarea>
+          <button id="btnSalvarAvaliacao" class="btn-salvar-avaliacao">Salvar avaliação</button>
+          <p class="modal__salvo" id="modalSalvoMsg"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="footer__container">
+      <div class="footer__brand">
+        <img src="/svgs/StarCine.svg" alt="StarCine" class="footer__logo">
+        <p class="footer__tagline">Avaliações de filmes e séries</p>
+      </div>
+
+      <div class="footer__coluna">
+        <h4>Explorar</h4>
+        <a href="#">Filmes</a>
+        <a href="#">Séries</a>
+        <a href="#">Lançamentos</a>
+        <a href="#">Populares</a>
+        <a href="#">Gêneros</a>
+      </div>
+
+      <div class="footer__coluna">
+        <h4>Conta</h4>
+        <a href="/pages/editar.html">Meu perfil</a>
+        <a href="#">Favoritos</a>
+        <a href="#">Minhas avaliações</a>
+        <a href="#">Configurações</a>
+      </div>
+
+      <div class="footer__coluna">
+        <h4>Legal</h4>
+        <a href="#">Política de privacidade</a>
+        <a href="#">Termos de uso</a>
+        <a href="#">Cookies</a>
+      </div>
+
+      <div class="footer__coluna">
+        <h4>Redes Sociais</h4>
+        <div class="footer__redes">
+          <a href="https://www.instagram.com/nexs.software/" target="_blank" rel="noopener noreferrer"
+            aria-label="Instagram">
+            <img src="/icons footer/instagram (2).png" alt="Instagram">
+          </a>
+          <a href="https://github.com/Mateuscorrealana" target="_blank" rel="noopener noreferrer"
+            aria-label="GitHub de Mateus Correa">
+            <img src="/icons footer/github.png" alt="GitHub de Mateus Correa">
+          </a>
+          <a href="https://github.com/silvazZzZ" target="_blank" rel="noopener noreferrer"
+            aria-label="GitHub de Irivam Junior">
+            <img src="/icons footer/github.png" alt="GitHub de Irivam Junior">
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer__bottom">
+      <p>© 2026 StarCine. Todos os direitos reservados.</p>
+      <p>Desenvolvido por: <span id="footerDevs"><a href="https://www.linkedin.com/in/mateuscorrealana/" target="_blank"
+            rel="noopener noreferrer">Mateus Correa</a> e <a href="https://www.linkedin.com/in/irivam-junior-756773348/"
+            target="_blank" rel="noopener noreferrer">Irivam Junior</a>.</span></p>
+    </div>
+  </footer>
+
+  <button id="btnVoltarTopo" class="btn-voltar-topo" aria-label="Voltar ao topo">
+    &#8593;
+  </button>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="/js/script.js"></script>
+  <script src="/pages/api.js"></script>
+</body>
+
+</html>

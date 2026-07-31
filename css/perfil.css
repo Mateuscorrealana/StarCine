@@ -1,0 +1,286 @@
+/* ===== CARD DE BIO ===== */
+.perfil-bio {
+  max-width: 1200px;
+  margin: 2.5rem auto;
+  padding: 2rem;
+  border-radius: 16px;
+  background: #1c1a17; /* cor padrão, o usuário pode trocar (salvo no localStorage) */
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  position: relative;
+}
+
+.perfil-bio__foto-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.perfil-bio__foto {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #E7A33E;
+  background: #0a0a0a;
+}
+
+.perfil-bio__trocar-foto {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: #E7A33E;
+  color: #0a0a0a;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.perfil-bio__info {
+  flex: 1;
+}
+
+.perfil-bio__saudacao {
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.4rem;
+  margin: 0 0 0.4rem;
+}
+
+.perfil-bio__saudacao span {
+  color: #E7A33E;
+  font-weight: 700;
+}
+
+.perfil-bio__membro {
+  color: #999;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  margin: 0 0 1.5rem;
+}
+
+.perfil-bio__stats {
+  display: flex;
+  gap: 3rem;
+}
+
+.perfil-bio__stat-numero {
+  color: #E7A33E;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.perfil-bio__stat-label {
+  color: #999;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.perfil-bio__editar {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  background: #E7A33E;
+  color: #0a0a0a;
+  border: none;
+  border-radius: 12px;
+  padding: 0.6rem 1.2rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ===== PAINEL DE EDIÇÃO (nome + cor do card) ===== */
+.perfil-editar-painel {
+  display: none;
+  max-width: 1200px;
+  margin: -1.5rem auto 2.5rem;
+  padding: 1.5rem 2rem;
+  background: #151617;
+  border-radius: 16px;
+  border: 1px solid #333;
+}
+
+.perfil-editar-painel.ativo {
+  display: block;
+}
+
+.perfil-editar-painel__campo {
+  margin-bottom: 1rem;
+}
+
+.perfil-editar-painel label {
+  display: block;
+  color: #E7A33E;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  margin-bottom: 0.4rem;
+}
+
+.perfil-editar-painel input[type="text"] {
+  width: 100%;
+  max-width: 320px;
+  padding: 0.5rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #0a0a0a;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.perfil-editar-painel input[type="text"]:focus {
+  outline: none;
+  border-color: #E7A33E;
+}
+
+.perfil-editar-painel input[type="color"] {
+  width: 60px;
+  height: 36px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.perfil-editar-painel button {
+  background: #E7A33E;
+  color: #0a0a0a;
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 1.4rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.perfil-editar-painel button:hover {
+  background: #e4962f;
+}
+
+/* ===== LISTA DE AVALIAÇÕES ===== */
+.perfil-avaliacoes {
+  max-width: 1200px;
+  margin: 0 auto 4rem;
+  padding: 0 1.5rem;
+}
+
+.perfil-avaliacoes__titulo {
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.3rem;
+  margin-bottom: 1.5rem;
+}
+
+.perfil-avaliacoes__titulo span {
+  color: #E7A33E;
+  font-weight: 700;
+}
+
+.avaliacao-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2rem;
+  padding: 1.2rem 0;
+  border-bottom: 1px solid #262626;
+}
+
+.avaliacao-item__poster {
+  width: 90px;
+  height: 130px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: #1c1c1c;
+}
+
+.avaliacao-item__corpo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.avaliacao-item__estrelas {
+  color: #E7A33E;
+  font-size: 0.9rem;
+  letter-spacing: 2px;
+}
+
+.avaliacao-item__titulo {
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.avaliacao-item__comentario {
+  color: #bbb;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.avaliacao-item__remover {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: #888;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  margin-top: 0.4rem;
+}
+
+.avaliacao-item__remover:hover {
+  color: #e07a7a;
+}
+
+.avaliacao-item__data {
+  color: #777;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.perfil-avaliacoes__vazio {
+  color: #888;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 700px) {
+  .perfil-bio {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .perfil-bio__editar {
+    position: static;
+    margin-bottom: 1rem;
+  }
+
+  .perfil-bio__stats {
+    justify-content: center;
+  }
+
+  .avaliacao-item {
+    flex-wrap: wrap;
+  }
+
+  .avaliacao-item__data {
+    order: 3;
+    margin-top: 0.5rem;
+  }
+}
