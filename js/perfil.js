@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
   
 if (logoHome) {
   logoHome.addEventListener("click", () => {
-    window.location.href = "/pages/index.html";
+    window.location.href = "/index.html";
   });
 }
   function formatarData(isoOuDate) {
