@@ -56,13 +56,13 @@
   right: 0;
 }
 
-/* o menu (busca + editar perfil + usuário) vira um único bloco flexível */
+/* o menu (busca + usuário) vira um único bloco flexível */
 .header__menu {
   display: flex;
   align-items: center;
   gap: 2rem;
   flex: 1;
-  justify-content: flex-end;
+  justify-content: space-between;
   min-width: 0;
 }
 
@@ -70,7 +70,8 @@
   position: relative;
   right: 0;
   flex: 1;
-  max-width: 700px;
+  max-width: 860px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -78,13 +79,22 @@
 
 .header__search-icon {
   position: absolute;
-  left: 0.9rem;
+  left: 1rem;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
+
+.header__search-img {
+  width: 35px;
+  height: 35px;
+  display: block;
 }
 
 .header__search input {
-  padding-left: 2.6rem;
+  width: 100%;
+  padding: 0.7rem 1.2rem 0.7rem 3rem;
 }
 
 .editar-perfil {
@@ -103,7 +113,11 @@
 
 .header__user {
   position: relative;
+  right: 10px;
+  top: 0;
 }
+
+
 
 .header__user-dropdown {
   position: absolute;
