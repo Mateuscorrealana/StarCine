@@ -511,6 +511,15 @@ document.addEventListener("DOMContentLoaded", () => {
      enquanto for null, mostramos o primeiro nome vindo do Google. */
   const GOOGLE_CLIENT_ID = "938643209629-plb7sdmh52qkuosl8hqnscfvu5u7kjdb.apps.googleusercontent.com";
   const CHAVE_USUARIO = "starcine_usuario";
+  const CHAVE_PERFIL = "starcine_perfil"; // mesma chave usada no perfil.js
+
+  function carregarPerfilLocal() {
+    try {
+      return JSON.parse(localStorage.getItem(CHAVE_PERFIL));
+    } catch {
+      return null;
+    }
+  }
 
   const headerUser = document.getElementById("headerUser");
   const userAvatar = document.getElementById("userAvatar");
@@ -531,9 +540,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function atualizarHeaderUsuario() {
     const usuario = carregarUsuario();
     if (usuario) {
-      userAvatar.src = usuario.foto;
+      const perfil = carregarPerfilLocal();
+      const fotoParaMostrar = (perfil && perfil.fotoManual && perfil.foto) ? perfil.foto : usuario.foto;
+      const nomeParaMostrar = (perfil && perfil.nomeManual && perfil.nome) ? perfil.nome : (usuario.nomeEditado || usuario.primeiroNome);
+
+      userAvatar.src = fotoParaMostrar;
       userAvatar.classList.add("header__user-img--logado");
-      userNomeEl.textContent = usuario.nomeEditado || usuario.primeiroNome;
+      userNomeEl.textContent = nomeParaMostrar;
     } else {
       userAvatar.src = "/svgs/user-icon.svg";
       userAvatar.classList.remove("header__user-img--logado");
