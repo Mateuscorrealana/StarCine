@@ -21,6 +21,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnSalvarPerfil = document.getElementById("btnSalvarPerfil");
   const listaAvaliacoes = document.getElementById("listaAvaliacoes");
   const logoHome = document.getElementById("logoHome");
+  const btnMenuMobile = document.getElementById("btnMenuMobile");
+  const headerMenu = document.getElementById("headerMenu");
   const MESES = ["jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez."];
 
 if (logoHome) {
@@ -28,6 +30,31 @@ if (logoHome) {
     window.location.href = "/index.html";
   });
 }
+
+  /* ===== MENU HAMBÚRGUER (mobile) ===== */
+  function fecharMenuMobile() {
+    if (headerMenu) headerMenu.classList.remove("aberto");
+    if (btnMenuMobile) {
+      btnMenuMobile.classList.remove("aberto");
+      btnMenuMobile.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  if (btnMenuMobile && headerMenu) {
+    btnMenuMobile.addEventListener("click", () => {
+      const abrindo = !headerMenu.classList.contains("aberto");
+      headerMenu.classList.toggle("aberto", abrindo);
+      btnMenuMobile.classList.toggle("aberto", abrindo);
+      btnMenuMobile.setAttribute("aria-expanded", String(abrindo));
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!headerMenu.contains(e.target) && !btnMenuMobile.contains(e.target)) {
+        fecharMenuMobile();
+      }
+    });
+  }
+
   function formatarData(isoOuDate) {
     const d = new Date(isoOuDate);
     return `${String(d.getDate()).padStart(2, "0")} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
@@ -184,7 +211,7 @@ if (logoHome) {
       const item = document.createElement("div");
       item.className = "avaliacao-item";
       item.innerHTML = `
-        <img class="avaliacao-item__poster" src="https://image.tmdb.org/t/p/w200${av.poster}" alt="${av.nome}">
+        <img class="avaliacao-item__poster" src="https://image.tmdb.org/t/p/w200${av.poster}" alt="${av.nome}" loading="lazy">
         <div class="avaliacao-item__corpo">
           <span class="avaliacao-item__estrelas">${"★".repeat(av.nota)}${"☆".repeat(5 - av.nota)}</span>
           <p class="avaliacao-item__titulo">${av.nome}</p>
