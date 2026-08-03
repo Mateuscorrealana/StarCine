@@ -1,3 +1,19 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-analytics.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyC5B2Q9q1vpSJYMAwhl3MNLAnz8EIfoamo",
+    authDomain: "starcine-d29ea.firebaseapp.com",
+    projectId: "starcine-d29ea",
+    storageBucket: "starcine-d29ea.firebasestorage.app",
+    messagingSenderId: "875320488841",
+    appId: "1:875320488841:web:dd1f2442b0b5526c7ea758",
+    measurementId: "G-3Z8HF8B86K"
+};
+
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
 document.addEventListener("DOMContentLoaded", () => {
 
   // A chamada agora vai para a SUA função serverless (/api/tmdb),
