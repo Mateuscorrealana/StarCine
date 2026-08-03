@@ -277,7 +277,7 @@ document.addEventListener("DOMContentLoaded", () => {
       card.className = "card";
       card.innerHTML = `
         <div class="card__poster-wrap">
-          <img class="card__poster" src="https://image.tmdb.org/t/p/w300${item.poster_path}" alt="${nome}">
+          <img class="card__poster" src="https://image.tmdb.org/t/p/w300${item.poster_path}" alt="${nome}" loading="lazy">
           <span class="card__selo">${tipo === "serie" ? "SÉRIE" : "FILME"}</span>
         </div>
         <div class="card__info">
@@ -354,7 +354,7 @@ document.addEventListener("DOMContentLoaded", () => {
       card.className = "card";
       card.innerHTML = `
         <div class="card__poster-wrap">
-          <img class="card__poster" src="https://image.tmdb.org/t/p/w300${item.poster_path}" alt="${nome}">
+          <img class="card__poster" src="https://image.tmdb.org/t/p/w300${item.poster_path}" alt="${nome}" loading="lazy">
           <span class="card__selo">FILME</span>
         </div>
         <div class="card__info">
@@ -439,10 +439,29 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /* ===== CARROSSEL DO BANNER PRINCIPAL ===== */
+  /* ===== CARROSSEL DO BANNER PRINCIPAL =====
+     As 4 imagens são pré-carregadas assim que a página abre, então quando
+     o usuário clica em prev/next elas já estão em cache — sem espera pra
+     baixar. A troca usa um fade suave (opacidade) em vez de trocar o src
+     "a seco", que causava aquele salto/travada perceptível. */
+  imagensBanner.forEach(src => {
+    const preCarga = new Image();
+    preCarga.src = src;
+  });
+
+  let trocandoSlide = false;
+
   function mostrarSlide(indice) {
-    if (!imgPrincipal) return;
-    imgPrincipal.src = imagensBanner[indice];
+    if (!imgPrincipal || trocandoSlide) return;
+    trocandoSlide = true;
+
+    imgPrincipal.classList.add("card-principal__img--trocando");
+    setTimeout(() => {
+      imgPrincipal.src = imagensBanner[indice];
+      imgPrincipal.classList.remove("card-principal__img--trocando");
+      trocandoSlide = false;
+    }, 150);
+
     dots.forEach(dot => dot.classList.remove("active"));
     if (dots[indice]) dots[indice].classList.add("active");
     indiceAtual = indice;
