@@ -101,6 +101,65 @@
   flex-shrink: 0;
 }
 
+.header__user {
+  position: relative;
+}
+
+.header__user-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background: #151617;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 0.4rem;
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+  z-index: 700;
+
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: max-height 0.2s ease, opacity 0.15s ease;
+}
+
+.header__user-dropdown.aberto {
+  max-height: 200px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.header__user-dropdown button {
+  background: none;
+  border: none;
+  color: #ccc;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.header__user-dropdown button:hover {
+  background: #232323;
+  color: #E7A33E;
+}
+
+#btnSair {
+  color: #e07a7a;
+}
+
+#btnSair:hover {
+  background: #2a1c1c;
+  color: #ff9a9a;
+}
+
 /* =========================================================
    HAMBÚRGUER — escondido no desktop
    ========================================================= */

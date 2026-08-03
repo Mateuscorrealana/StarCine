@@ -538,6 +538,7 @@ document.addEventListener("DOMContentLoaded", () => {
       userAvatar.src = "/svgs/user-icon.svg";
       userAvatar.classList.remove("header__user-img--logado");
       userNomeEl.textContent = "";
+      fecharDropdownUsuario();
     }
   }
 
@@ -622,14 +623,72 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  /* ===== DROPDOWN DO USUÁRIO (Meu perfil / Trocar de conta / Sair) ===== */
+  const userDropdown = document.getElementById("userDropdown");
+  const btnVerPerfil = document.getElementById("btnVerPerfil");
+  const btnTrocarConta = document.getElementById("btnTrocarConta");
+  const btnSair = document.getElementById("btnSair");
+
+  function fecharDropdownUsuario() {
+    if (userDropdown) userDropdown.classList.remove("aberto");
+  }
+
+  function abrirDropdownUsuario() {
+    if (userDropdown) userDropdown.classList.add("aberto");
+  }
+
+  function sairDaConta() {
+    localStorage.removeItem(CHAVE_USUARIO);
+    // impede que o Google faça login automático de novo com a última conta
+    if (window.google && google.accounts && google.accounts.id) {
+      google.accounts.id.disableAutoSelect();
+    }
+    atualizarHeaderUsuario();
+    fecharDropdownUsuario();
+  }
+
+  if (btnVerPerfil) {
+    btnVerPerfil.addEventListener("click", (e) => {
+      e.stopPropagation();
+      window.location.href = "/pages/editar.html";
+    });
+  }
+
+  if (btnSair) {
+    btnSair.addEventListener("click", (e) => {
+      e.stopPropagation();
+      sairDaConta();
+    });
+  }
+
+  if (btnTrocarConta) {
+    btnTrocarConta.addEventListener("click", (e) => {
+      e.stopPropagation();
+      sairDaConta();
+      // reabre o login pra escolher outra conta — se o navegador tiver mais
+      // de uma conta Google logada, o seletor de contas aparece de novo
+      abrirModalLogin();
+    });
+  }
+
   if (headerUser) {
-    headerUser.addEventListener("click", () => {
+    headerUser.addEventListener("click", (e) => {
       const usuario = carregarUsuario();
       if (usuario) {
-        // já logado: leva direto para a página de perfil, pra poder editar
-        window.location.href = "/pages/editar.html";
+        e.stopPropagation();
+        if (userDropdown && userDropdown.classList.contains("aberto")) {
+          fecharDropdownUsuario();
+        } else {
+          abrirDropdownUsuario();
+        }
       } else {
         abrirModalLogin();
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!headerUser.contains(e.target)) {
+        fecharDropdownUsuario();
       }
     });
   }
