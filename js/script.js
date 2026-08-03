@@ -1,5 +1,10 @@
-/* Código completo com correção: avaliações e perfil por usuário (evita reutilizar dados de outra conta)
-   Mantém as melhorias de robustez e performance aplicadas antes.
+/* Ajustado: robustez + performance/memory
+   Mantive a estrutura original, mas:
+   - centralizei fetchs (fetchTmdb) com timeout
+   - tratei erros de rede/resposta
+   - cache de localStorage para evitar reparses
+   - renderização com DocumentFragment e criação segura de elementos
+   - debounce reutilizável ligado ao timeout existente
 */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
@@ -20,8 +25,10 @@ const analytics = getAnalytics(app);
 
 document.addEventListener("DOMContentLoaded", () => {
 
+  // A chamada agora vai para a SUA função serverless (/api/tmdb).
   const TMDB_BASE = "/api/tmdb";
 
+  // DOM nodes (alguns podem não existir em todas as páginas)
   const grid = document.getElementById("grid-catalogo");
   const inputBusca = document.querySelector(".header__search-input");
   const contadorTitulos = document.getElementById("contadorTitulos");
@@ -51,18 +58,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const explorarPrev = document.getElementById("explorarPrev");
   const explorarNext = document.getElementById("explorarNext");
 
-  // BASE keys (agora usaremos chaves por usuário: base + "__" + encodedEmail)
-  const CHAVE_AVALIACOES_BASE = "starcine_avaliacoes";
-  const CHAVE_USUARIO = "starcine_usuario";
-  const CHAVE_PERFIL_BASE = "starcine_perfil";
-
-  let itemAberto = null;
+  const CHAVE_AVALIACOES = "starcine_avaliacoes";
+  let itemAberto = null;   // { id, tipo, nome, poster }
   let notaSelecionada = 0;
 
-  let listaAtual = [];
-  let filtroTipoAtual = "todo";
-  let generosMovie = {};
-  let generosTV = {};
+  let listaAtual = [];       // últimos resultados crus vindos da API
+  let filtroTipoAtual = "todo"; // todo | filme | serie
+  let generosMovie = {};     // { id: nome } - gêneros de filme
+  let generosTV = {};        // { id: nome } - gêneros de série
   let timeout = null;
   let indiceAtual = 0;
 
@@ -73,23 +76,45 @@ document.addEventListener("DOMContentLoaded", () => {
     "/img-principal/img-principal4.png",
   ];
 
-  // Caches locais
-  let avaliacoesCache = null; // carregadas para o usuário atual
+  // --- Caches de localStorage para performance ---
+  let avaliacoesCache = null; // null => ainda não carregado
   let usuarioCache = null;
   let perfilCache = null;
 
-  // Helper para gerar chave final com base no usuário (email)
-  function storageKeyFor(base) {
-    const usuario = carregarUsuario();
-    if (usuario && usuario.email) {
-      // encodeURIComponent para evitar caracteres inválidos na chave
-      return `${base}__${encodeURIComponent(usuario.email)}`;
+  // --- Helpers: localStorage com cache ---
+  function carregarAvaliacoes() {
+    if (avaliacoesCache !== null) return avaliacoesCache;
+    try {
+      avaliacoesCache = JSON.parse(localStorage.getItem(CHAVE_AVALIACOES)) || [];
+    } catch {
+      avaliacoesCache = [];
     }
-    // fallback (anônimo)
-    return `${base}__ANON`;
+    return avaliacoesCache;
   }
 
-  // --- Usuário ---
+  function salvarAvaliacoes(lista) {
+    avaliacaoSafeWrite(lista);
+  }
+
+  function avaliacaoSafeWrite(lista) {
+    try {
+      localStorage.setItem(CHAVE_AVALIACOES, JSON.stringify(lista));
+      avaliacoesCache = lista;
+    } catch (err) {
+      console.error("Erro ao salvar avaliações no localStorage:", err);
+    }
+  }
+
+  function buscarAvaliacaoExistente(id, tipo) {
+    const arr = carregarAvaliacoes();
+    return arr.find(a => a.id === id && a.tipo === tipo);
+  }
+
+  // Usuario / Perfil cache
+  const GOOGLE_CLIENT_ID = "938643209629-plb7sdmh52qkuosl8hqnscfvu5u7kjdb.apps.googleusercontent.com";
+  const CHAVE_USUARIO = "starcine_usuario";
+  const CHAVE_PERFIL = "starcine_perfil";
+
   function carregarUsuario() {
     if (usuarioCache !== null) return usuarioCache;
     try {
@@ -99,130 +124,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     return usuarioCache;
   }
-
   function salvarUsuario(usuario) {
     try {
       localStorage.setItem(CHAVE_USUARIO, JSON.stringify(usuario));
       usuarioCache = usuario;
-      // reset caches dependentes do usuário
-      avaliacoesCache = null;
-      perfilCache = null;
     } catch (err) {
       console.error("Erro ao salvar usuário:", err);
     }
   }
-
-  // --- Perfil por usuário ---
   function carregarPerfilLocal() {
     if (perfilCache !== null) return perfilCache;
     try {
-      const key = storageKeyFor(CHAVE_PERFIL_BASE);
-      perfilCache = JSON.parse(localStorage.getItem(key));
+      perfilCache = JSON.parse(localStorage.getItem(CHAVE_PERFIL));
     } catch {
       perfilCache = null;
     }
     return perfilCache;
   }
-  function salvarPerfilLocal(perfil) {
-    try {
-      const key = storageKeyFor(CHAVE_PERFIL_BASE);
-      localStorage.setItem(key, JSON.stringify(perfil));
-      perfilCache = perfil;
-    } catch (err) {
-      console.error("Erro ao salvar perfil:", err);
-    }
-  }
 
-  // substitua por esta versão
-  function carregarAvaliacoes() {
-    if (avaliacoesCache !== null) return avaliacoesCache;
-    try {
-      const key = storageKeyFor(CHAVE_AVALIACOES_BASE);
-      const raw = localStorage.getItem(key);
-      avaliacoesCache = raw ? JSON.parse(raw) : [];
-      // tenta fallback/migração se existirem avaliações ANON e não houver nada na chave do usuário
-      const anonKey = `${CHAVE_AVALIACOES_BASE}__ANON`;
-      if ((avaliacoesCache.length === 0) && localStorage.getItem(anonKey)) {
-        try {
-          const anon = JSON.parse(localStorage.getItem(anonKey)) || [];
-          if (Array.isArray(anon) && anon.length > 0) {
-            // não sobrescreve automaticamente, apenas reusa ANON se usuário for ANON
-            if (key.endsWith("__ANON")) {
-              avaliacoesCache = anon;
-            }
-          }
-        } catch { /* ignore */ }
-      }
-    } catch (err) {
-      console.error("Erro ao carregar avaliações:", err);
-      avaliacoesCache = [];
-    }
-    return avaliacoesCache;
-  }
-
-  function salvarAvaliacoes(lista) {
-    try {
-      const key = storageKeyFor(CHAVE_AVALIACOES_BASE);
-      localStorage.setItem(key, JSON.stringify(lista));
-      avaliacoesCache = lista;
-      console.debug(`[starcine] avaliações salvas (${key}):`, lista.length);
-    } catch (err) {
-      console.error("Erro ao salvar avaliações no localStorage:", err);
-    }
-  }
-
-  // Função auxiliar para migrar avaliações ANON para o usuário atual (merge)
-  function migrarAvaliacoesAnonParaUsuario() {
-    try {
-      const anonKey = `${CHAVE_AVALIACOES_BASE}__ANON`;
-      const anonRaw = localStorage.getItem(anonKey);
-      if (!anonRaw) return;
-      const anon = JSON.parse(anonRaw) || [];
-      if (!Array.isArray(anon) || anon.length === 0) return;
-
-      const userKey = storageKeyFor(CHAVE_AVALIACOES_BASE);
-      const userRaw = localStorage.getItem(userKey);
-      const userArr = userRaw ? (JSON.parse(userRaw) || []) : [];
-
-      // merge sem duplicatas (mesmo id+tipo)
-      const mapa = new Map(userArr.map(a => [`${a.id}_${a.tipo}`, a]));
-      let adicionados = 0;
-      anon.forEach(a => {
-        const chave = `${a.id}_${a.tipo}`;
-        if (!mapa.has(chave)) {
-          mapa.set(chave, a);
-          adicionados++;
-        }
-      });
-
-      const merged = Array.from(mapa.values());
-      localStorage.setItem(userKey, JSON.stringify(merged));
-      avaliacoesCache = merged;
-
-      // opcional: remover ANON após migração (comente se não quiser remover)
-      localStorage.removeItem(anonKey);
-      console.info(`[starcine] migradas ${adicionados} avaliações ANON para ${userKey}`);
-    } catch (err) {
-      console.error("Erro ao migrar avaliações ANON:", err);
-    }
-  }
-
-  function salvarAvaliacoes(lista) {
-    try {
-      const key = storageKeyFor(CHAVE_AVALIACOES_BASE);
-      localStorage.setItem(key, JSON.stringify(lista));
-      avaliacoesCache = lista;
-    } catch (err) {
-      console.error("Erro ao salvar avaliações:", err);
-    }
-  }
-
-  function buscarAvaliacaoExistente(id, tipo) {
-    const arr = carregarAvaliacoes();
-    return arr.find(a => a.id === id && a.tipo === tipo);
-  }
-
-  // --- TMDB fetch centralizado com timeout ---
+  // --- Helper: timeout + fetch centralizado para TMDB proxied ---
   async function fetchTmdb(path, params = {}, timeoutMs = 10000) {
     try {
       const url = new URL(TMDB_BASE, location.origin);
@@ -239,6 +159,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch(url.toString(), { signal: controller.signal });
       clearTimeout(id);
       if (!res.ok) {
+        // tenta extrair mensagem de erro da API, se houver
         let text;
         try { text = await res.text(); } catch { text = res.statusText; }
         throw new Error(`TMDB fetch falhou: ${res.status} ${res.statusText} - ${text}`);
@@ -252,13 +173,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // --- Gêneros helper ---
+  // --- Util: nomes de gêneros para um item ---
   function nomesGenerosDoItem(item, tipo) {
     const mapa = tipo === "serie" ? generosTV : generosMovie;
     return (item.genre_ids || []).map(id => mapa[id]).filter(Boolean);
   }
 
-  // --- Estrelas UI ---
+  // --- Estrelas / Avaliação UI ---
   function pintarEstrelas(nota) {
     if (!estrelasContainer) return;
     const estrelas = estrelasContainer.querySelectorAll("span");
@@ -270,13 +191,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (estrelasContainer) {
     estrelasContainer.querySelectorAll("span").forEach(estrela => {
-      estrela.addEventListener("click", () => {
+      const onClick = () => {
         notaSelecionada = Number(estrela.dataset.valor || 0);
         pintarEstrelas(notaSelecionada);
-      });
-      estrela.addEventListener("mouseenter", () => {
+      };
+      const onEnter = () => {
         pintarEstrelas(Number(estrela.dataset.valor || 0));
-      });
+      };
+      estrela.addEventListener("click", onClick);
+      estrela.addEventListener("mouseenter", onEnter);
     });
 
     estrelasContainer.addEventListener("mouseleave", () => {
@@ -323,7 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- Modal ---
+  // --- MODAL ---
   async function abrirModal(id, tipo) {
     if (!modal) return;
     try {
@@ -344,6 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       itemAberto = { id, tipo, nome, poster: item.poster_path };
 
+      // preencher avaliação existente, se houver
       const existente = buscarAvaliacaoExistente(id, tipo);
       notaSelecionada = existente ? existente.nota : 0;
       if (modalComentario) modalComentario.value = existente ? existente.comentario : "";
@@ -352,10 +276,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       modal.classList.add("ativo");
 
+      // foco no modal para acessibilidade (se houver elemento focalizável)
       try {
         const focoEl = modal.querySelector("button, [tabindex], input, textarea");
         if (focoEl) focoEl.focus();
-      } catch (err) { /* ignore */ }
+      } catch (err) { /* safe ignore */ }
     } catch (err) {
       console.error("Erro ao abrir modal:", err);
       if (modalDescricao) modalDescricao.textContent = "Erro ao carregar detalhes. Tente novamente.";
@@ -366,6 +291,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function fecharModal() {
     if (!modal) return;
     modal.classList.remove("ativo");
+    // retorno de foco não implementado (poderia focar o card clicado se armazenado)
   }
 
   if (modalOverlay) modalOverlay.addEventListener("click", fecharModal);
@@ -377,7 +303,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- Busca / catálogo ---
+  // --- BUSCAS / CATÁLOGO ---
   async function carregarPopulares() {
     try {
       const dados = await fetchTmdb("trending/all/week", { language: "pt-BR" });
@@ -385,6 +311,7 @@ document.addEventListener("DOMContentLoaded", () => {
       aplicarFiltros();
     } catch (err) {
       console.error("Erro ao carregar populares:", err);
+      // fallback: limpa lista atual e renderiza vazio
       listaAtual = [];
       aplicarFiltros();
     }
@@ -392,7 +319,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function buscar(termo) {
     try {
-      if (!termo) { await carregarPopulares(); return; }
+      if (!termo) {
+        await carregarPopulares();
+        return;
+      }
       const dados = await fetchTmdb("search/multi", { language: "pt-BR", query: termo });
       listaAtual = (dados.results || []).filter(item => item.media_type !== "person");
       aplicarFiltros();
@@ -430,7 +360,9 @@ document.addEventListener("DOMContentLoaded", () => {
       lista.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
     }
 
+    // remove itens sem poster ANTES de contar
     lista = lista.filter(item => item.poster_path);
+
     renderizarCards(lista);
 
     if (contadorTitulos) {
@@ -503,6 +435,7 @@ document.addEventListener("DOMContentLoaded", () => {
     grid.appendChild(frag);
   }
 
+  // --- BUSCA: debounce e eventos Enter/icone ---
   const iconeBusca = document.querySelector(".header__search-icon");
 
   function executarBusca() {
@@ -514,6 +447,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // debounce central, usando timeout var definida no escopo superior
   function debounceFn(fn, wait) {
     return (...args) => {
       if (timeout) {
@@ -555,6 +489,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // carrega gêneros e popula o select (se existir)
   async function carregarGeneros() {
     try {
       const [dMovie, dTV] = await Promise.all([
@@ -567,11 +502,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!selectGenero) return;
 
+      // nomes únicos
       const nomesUnicos = [...new Set([
         ...Object.values(generosMovie),
         ...Object.values(generosTV)
       ])].sort();
 
+      // limpa e adiciona opção "todos"
       selectGenero.innerHTML = "";
       const optAll = document.createElement("option");
       optAll.value = "todos";
@@ -589,6 +526,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // --- EXPLORAR (carrossel) ---
   async function carregarExplorar() {
     if (!explorarCarrossel) return;
     try {
@@ -665,6 +603,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // --- FILTROS (Todo / Filmes / Séries) ---
   botoesFiltro.forEach(botao => {
     botao.addEventListener("click", () => {
       botoesFiltro.forEach(b => b.classList.remove("filtro--ativo"));
@@ -677,6 +616,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (selectGenero) selectGenero.addEventListener("change", aplicarFiltros);
   if (selectOrdem) selectOrdem.addEventListener("change", aplicarFiltros);
 
+  // --- LOGO RELOAD ---
   if (logoReload) {
     logoReload.addEventListener("click", () => {
       if (inputBusca && inputBusca.value.trim().length > 0) {
@@ -688,6 +628,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // --- MENU MOBILE ---
   function fecharMenuMobile() {
     if (headerMenu) headerMenu.classList.remove("aberto");
     if (btnMenuMobile) {
@@ -717,6 +658,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // --- BANNER CARROSSEL ---
   imagensBanner.forEach(src => {
     const preCarga = new Image();
     preCarga.src = src;
@@ -760,6 +702,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // --- VOLTAR AO TOPO ---
   const btnVoltarTopo = document.getElementById("btnVoltarTopo");
   if (btnVoltarTopo) {
     window.addEventListener("scroll", () => {
@@ -772,8 +715,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const GOOGLE_CLIENT_ID = "938643209629-plb7sdmh52qkuosl8hqnscfvu5u7kjdb.apps.googleusercontent.com";
-
+  // --- LOGIN GOOGLE & HEADER USUÁRIO ---
   const headerUser = document.getElementById("headerUser");
   const userAvatar = document.getElementById("userAvatar");
   const userNomeEl = document.getElementById("userNome");
@@ -830,13 +772,6 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 
       salvarUsuario(usuario);
-      // limpa caches dependentes (garante leitura das chaves do novo usuário)
-      avaliacoesCache = null;
-      perfilCache = null;
-
-      // MIGRA avaliações ANON (se houver) para a conta que acabou de logar
-      migrarAvaliacoesAnonParaUsuario();
-
       atualizarHeaderUsuario();
 
       const modalLoginAtual = document.getElementById("modalLogin");
@@ -892,6 +827,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // --- DROPDOWN USUÁRIO ---
   const userDropdown = document.getElementById("userDropdown");
   const btnVerPerfil = document.getElementById("btnVerPerfil");
   const btnTrocarConta = document.getElementById("btnTrocarConta");
@@ -903,16 +839,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function abrirDropdownUsuario() {
     if (userDropdown) userDropdown.classList.add("aberto");
   }
-
   function sairDaConta() {
     try {
       localStorage.removeItem(CHAVE_USUARIO);
       usuarioCache = null;
-      // limpamos caches dependentes do usuário atual
-      avaliacoesCache = null;
-      perfilCache = null;
-      // opcional: não removemos dados por completo do localStorage (são por-usuário),
-      // apenas limpamos a referência de usuário atual para evitar mistura.
     } catch (err) {
       console.error("Erro ao remover usuário:", err);
     }
@@ -941,7 +871,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnTrocarConta.addEventListener("click", (e) => {
       e.stopPropagation();
       sairDaConta();
-      // abre a tela de login para escolher outra conta
       abrirModalLogin();
     });
   }
@@ -970,7 +899,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   atualizarHeaderUsuario();
 
-  // Inicialização
+  // --- Inicialização ---
   carregarGeneros();
   carregarPopulares();
   carregarExplorar();
