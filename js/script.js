@@ -133,27 +133,78 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // --- Avaliações por usuário ---
+  // substitua por esta versão
   function carregarAvaliacoes() {
     if (avaliacoesCache !== null) return avaliacoesCache;
     try {
       const key = storageKeyFor(CHAVE_AVALIACOES_BASE);
-      avaliacoesCache = JSON.parse(localStorage.getItem(key)) || [];
-      // Fallback simples: se não existir e houver uma chave global antiga, migrar (opcional)
-      if ((!avaliacoesCache || avaliacoesCache.length === 0) && localStorage.getItem(CHAVE_AVALIACOES_BASE)) {
+      const raw = localStorage.getItem(key);
+      avaliacoesCache = raw ? JSON.parse(raw) : [];
+      // tenta fallback/migração se existirem avaliações ANON e não houver nada na chave do usuário
+      const anonKey = `${CHAVE_AVALIACOES_BASE}__ANON`;
+      if ((avaliacoesCache.length === 0) && localStorage.getItem(anonKey)) {
         try {
-          const global = JSON.parse(localStorage.getItem(CHAVE_AVALIACOES_BASE));
-          if (Array.isArray(global) && usuarioCache && usuarioCache.email) {
-            // migrar para a chave do usuário atual
-            localStorage.setItem(key, JSON.stringify(global));
-            avaliacoesCache = global;
+          const anon = JSON.parse(localStorage.getItem(anonKey)) || [];
+          if (Array.isArray(anon) && anon.length > 0) {
+            // não sobrescreve automaticamente, apenas reusa ANON se usuário for ANON
+            if (key.endsWith("__ANON")) {
+              avaliacoesCache = anon;
+            }
           }
         } catch { /* ignore */ }
       }
-    } catch {
+    } catch (err) {
+      console.error("Erro ao carregar avaliações:", err);
       avaliacoesCache = [];
     }
     return avaliacoesCache;
+  }
+
+  function salvarAvaliacoes(lista) {
+    try {
+      const key = storageKeyFor(CHAVE_AVALIACOES_BASE);
+      localStorage.setItem(key, JSON.stringify(lista));
+      avaliacoesCache = lista;
+      console.debug(`[starcine] avaliações salvas (${key}):`, lista.length);
+    } catch (err) {
+      console.error("Erro ao salvar avaliações no localStorage:", err);
+    }
+  }
+
+  // Função auxiliar para migrar avaliações ANON para o usuário atual (merge)
+  function migrarAvaliacoesAnonParaUsuario() {
+    try {
+      const anonKey = `${CHAVE_AVALIACOES_BASE}__ANON`;
+      const anonRaw = localStorage.getItem(anonKey);
+      if (!anonRaw) return;
+      const anon = JSON.parse(anonRaw) || [];
+      if (!Array.isArray(anon) || anon.length === 0) return;
+
+      const userKey = storageKeyFor(CHAVE_AVALIACOES_BASE);
+      const userRaw = localStorage.getItem(userKey);
+      const userArr = userRaw ? (JSON.parse(userRaw) || []) : [];
+
+      // merge sem duplicatas (mesmo id+tipo)
+      const mapa = new Map(userArr.map(a => [`${a.id}_${a.tipo}`, a]));
+      let adicionados = 0;
+      anon.forEach(a => {
+        const chave = `${a.id}_${a.tipo}`;
+        if (!mapa.has(chave)) {
+          mapa.set(chave, a);
+          adicionados++;
+        }
+      });
+
+      const merged = Array.from(mapa.values());
+      localStorage.setItem(userKey, JSON.stringify(merged));
+      avaliacoesCache = merged;
+
+      // opcional: remover ANON após migração (comente se não quiser remover)
+      localStorage.removeItem(anonKey);
+      console.info(`[starcine] migradas ${adicionados} avaliações ANON para ${userKey}`);
+    } catch (err) {
+      console.error("Erro ao migrar avaliações ANON:", err);
+    }
   }
 
   function salvarAvaliacoes(lista) {
@@ -782,6 +833,9 @@ document.addEventListener("DOMContentLoaded", () => {
       // limpa caches dependentes (garante leitura das chaves do novo usuário)
       avaliacoesCache = null;
       perfilCache = null;
+
+      // MIGRA avaliações ANON (se houver) para a conta que acabou de logar
+      migrarAvaliacoesAnonParaUsuario();
 
       atualizarHeaderUsuario();
 
