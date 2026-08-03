@@ -1,25 +1,60 @@
+/* ===========================================================
+   STARCINE - script.js (completo, com Firebase integrado)
+   ===========================================================
+   FIREBASE:
+   - A config do Firebase Web (apiKey, appId, etc.) é PÚBLICA por
+     design — pode ficar no código. A segurança vem das Regras do
+     Firestore/Storage e das restrições da chave no Google Cloud.
+   - Cole abaixo, em FIREBASE_API_KEY, a "apiKey" que aparece no
+     console do Firebase (Configurações do projeto > Seus apps).
+   - Analytics só roda no navegador e em contexto suportado, por isso
+     está protegido com isSupported().
+   =========================================================== */
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-analytics.js";
+import {
+  getAnalytics,
+  isSupported as analyticsIsSupported,
+  logEvent,
+} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-analytics.js";
+
+const FIREBASE_API_KEY = "COLE_AQUI_SUA_FIREBASE_WEB_API_KEY";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyC5B2Q9q1vpSJYMAwhl3MNLAnz8EIfoamo",
-    authDomain: "starcine-d29ea.firebaseapp.com",
-    projectId: "starcine-d29ea",
-    storageBucket: "starcine-d29ea.firebasestorage.app",
-    messagingSenderId: "875320488841",
-    appId: "1:875320488841:web:dd1f2442b0b5526c7ea758",
-    measurementId: "G-3Z8HF8B86K"
+  apiKey: FIREBASE_API_KEY,
+  authDomain: "starcine-d29ea.firebaseapp.com",
+  projectId: "starcine-d29ea",
+  storageBucket: "starcine-d29ea.firebasestorage.app",
+  messagingSenderId: "875320488841",
+  appId: "1:875320488841:web:dd1f2442b0b5526c7ea758",
+  measurementId: "G-3Z8HF8B86K",
 };
 
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+export const firebaseApp = initializeApp(firebaseConfig);
+export let firebaseAnalytics = null;
+
+// Analytics precisa de https/localhost e de suporte do navegador.
+analyticsIsSupported()
+  .then((suportado) => {
+    if (suportado) {
+      firebaseAnalytics = getAnalytics(firebaseApp);
+    }
+  })
+  .catch((erro) => console.warn("Analytics não inicializado:", erro));
+
+/* Helper para registrar eventos sem quebrar se o Analytics não subiu */
+function registrarEvento(nome, params = {}) {
+  if (!firebaseAnalytics) return;
+  try {
+    logEvent(firebaseAnalytics, nome, params);
+  } catch (erro) {
+    console.warn("Falha ao registrar evento:", nome, erro);
+  }
+}
 
 document.addEventListener("DOMContentLoaded", () => {
-
-  // A chamada agora vai para a SUA função serverless (/api/tmdb),
-  // que guarda a chave da TMDB no servidor (variável de ambiente
-  // TMDB_API_KEY). O navegador nunca vê a chave — dá pra conferir
-  // na aba Rede do inspecionar: só aparece "/api/tmdb?...".
+  // A chamada vai para a SUA função serverless (/api/tmdb), que guarda a
+  // chave da TMDB no servidor (TMDB_API_KEY). O navegador nunca vê a chave.
   const TMDB_BASE = "/api/tmdb";
 
   const grid = document.getElementById("grid-catalogo");
@@ -28,6 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const botoesFiltro = document.querySelectorAll(".filtro");
   const selectGenero = document.getElementById("selectGenero");
   const selectOrdem = document.getElementById("selectOrdem");
+
   /* ===== MENU HAMBÚRGUER (mobile) ===== */
   const btnMenuMobile = document.getElementById("btnMenuMobile");
   const headerMenu = document.getElementById("headerMenu");
@@ -54,13 +90,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const explorarNext = document.getElementById("explorarNext");
 
   const CHAVE_AVALIACOES = "starcine_avaliacoes";
-  let itemAberto = null;   // { id, tipo, nome, poster } do item atual no modal
+  let itemAberto = null; // { id, tipo, nome, poster } do item atual no modal
   let notaSelecionada = 0;
 
-  let listaAtual = [];       // últimos resultados crus vindos da API
+  let listaAtual = []; // últimos resultados crus vindos da API
   let filtroTipoAtual = "todo"; // todo | filme | serie
-  let generosMovie = {};     // { id: nome } - gêneros de filme
-  let generosTV = {};        // { id: nome } - gêneros de série
+  let generosMovie = {}; // { id: nome } - gêneros de filme
+  let generosTV = {}; // { id: nome } - gêneros de série
   let timeout;
   let indiceAtual = 0;
 
@@ -76,17 +112,19 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const [rMovie, rTV] = await Promise.all([
         fetch(`${TMDB_BASE}?path=genre/movie/list&language=pt-BR`),
-        fetch(`${TMDB_BASE}?path=genre/tv/list&language=pt-BR`)
+        fetch(`${TMDB_BASE}?path=genre/tv/list&language=pt-BR`),
       ]);
       const dMovie = await rMovie.json();
       const dTV = await rTV.json();
 
-      dMovie.genres.forEach(g => generosMovie[g.id] = g.name);
-      dTV.genres.forEach(g => generosTV[g.id] = g.name);
+      dMovie.genres.forEach((g) => (generosMovie[g.id] = g.name));
+      dTV.genres.forEach((g) => (generosTV[g.id] = g.name));
 
-      const nomesUnicos = [...new Set([...Object.values(generosMovie), ...Object.values(generosTV)])].sort();
+      const nomesUnicos = [
+        ...new Set([...Object.values(generosMovie), ...Object.values(generosTV)]),
+      ].sort();
 
-      nomesUnicos.forEach(nome => {
+      nomesUnicos.forEach((nome) => {
         const opt = document.createElement("option");
         opt.value = nome;
         opt.textContent = nome;
@@ -99,13 +137,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function nomesGenerosDoItem(item, tipo) {
     const mapa = tipo === "serie" ? generosTV : generosMovie;
-    return (item.genre_ids || []).map(id => mapa[id]).filter(Boolean);
+    return (item.genre_ids || []).map((id) => mapa[id]).filter(Boolean);
   }
 
-  /* ===== AVALIAÇÕES (localStorage) =====
-     Guardadas em "starcine_avaliacoes" como um array de objetos:
-     { id, tipo, nome, poster, nota, comentario, data }
-     Sua futura página de perfil pode ler essa mesma chave do localStorage. */
+  /* ===== AVALIAÇÕES (localStorage) ===== */
   function carregarAvaliacoes() {
     try {
       return JSON.parse(localStorage.getItem(CHAVE_AVALIACOES)) || [];
@@ -119,20 +154,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function buscarAvaliacaoExistente(id, tipo) {
-    return carregarAvaliacoes().find(a => a.id === id && a.tipo === tipo);
+    return carregarAvaliacoes().find((a) => a.id === id && a.tipo === tipo);
   }
 
   function pintarEstrelas(nota) {
     if (!estrelasContainer) return;
     const estrelas = estrelasContainer.querySelectorAll("span");
-    estrelas.forEach(estrela => {
+    estrelas.forEach((estrela) => {
       const valor = Number(estrela.dataset.valor);
       estrela.classList.toggle("preenchida", valor <= nota);
     });
   }
 
   if (estrelasContainer) {
-    estrelasContainer.querySelectorAll("span").forEach(estrela => {
+    estrelasContainer.querySelectorAll("span").forEach((estrela) => {
       estrela.addEventListener("click", () => {
         notaSelecionada = Number(estrela.dataset.valor);
         pintarEstrelas(notaSelecionada);
@@ -158,7 +193,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const avaliacoes = carregarAvaliacoes();
-      const existente = avaliacoes.findIndex(a => a.id === itemAberto.id && a.tipo === itemAberto.tipo);
+      const existente = avaliacoes.findIndex(
+        (a) => a.id === itemAberto.id && a.tipo === itemAberto.tipo,
+      );
 
       const registro = {
         id: itemAberto.id,
@@ -167,7 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
         poster: itemAberto.poster,
         nota: notaSelecionada,
         comentario: modalComentario.value.trim(),
-        data: new Date().toISOString()
+        data: new Date().toISOString(),
       };
 
       if (existente >= 0) {
@@ -177,6 +214,11 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       salvarAvaliacoes(avaliacoes);
+      registrarEvento("avaliacao_salva", {
+        item_id: registro.id,
+        tipo: registro.tipo,
+        nota: registro.nota,
+      });
       modalSalvoMsg.style.color = "#6fcf6f";
       modalSalvoMsg.textContent = "Avaliação salva no seu perfil!";
     });
@@ -191,7 +233,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const nome = item.title || item.name;
     const ano = (item.release_date || item.first_air_date || "").slice(0, 4);
-    const generos = item.genres.map(g => g.name).join(", ");
+    const generos = item.genres.map((g) => g.name).join(", ");
 
     modalPoster.src = `https://image.tmdb.org/t/p/w500${item.poster_path}`;
     modalPoster.alt = nome;
@@ -209,6 +251,11 @@ document.addEventListener("DOMContentLoaded", () => {
     pintarEstrelas(notaSelecionada);
 
     modal.classList.add("ativo");
+    registrarEvento("select_content", {
+      content_type: tipo,
+      item_id: String(id),
+      item_name: nome,
+    });
   }
 
   function fecharModal() {
@@ -230,7 +277,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const url = `${TMDB_BASE}?path=trending/all/week&language=pt-BR`;
     const resposta = await fetch(url);
     const dados = await resposta.json();
-    listaAtual = dados.results.filter(item => item.media_type !== "person");
+    listaAtual = dados.results.filter((item) => item.media_type !== "person");
     aplicarFiltros();
   }
 
@@ -238,17 +285,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const url = `${TMDB_BASE}?path=search/multi&language=pt-BR&query=${encodeURIComponent(termo)}`;
     const resposta = await fetch(url);
     const dados = await resposta.json();
-    listaAtual = dados.results.filter(item => item.media_type !== "person");
+    listaAtual = dados.results.filter((item) => item.media_type !== "person");
     aplicarFiltros();
+    registrarEvento("search", { search_term: termo });
   }
 
-  /* Aplica filtro de tipo (todo/filme/serie), gênero e ordenação sobre listaAtual,
-     depois renderiza e atualiza o contador de títulos */
+  /* Aplica filtro de tipo (todo/filme/serie), gênero e ordenação */
   function aplicarFiltros() {
     let lista = [...listaAtual];
 
     if (filtroTipoAtual !== "todo") {
-      lista = lista.filter(item => {
+      lista = lista.filter((item) => {
         const tipo = item.media_type === "tv" ? "serie" : "filme";
         return tipo === filtroTipoAtual;
       });
@@ -256,7 +303,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const generoSelecionado = selectGenero.value;
     if (generoSelecionado !== "todos") {
-      lista = lista.filter(item => {
+      lista = lista.filter((item) => {
         const tipo = item.media_type === "tv" ? "serie" : "filme";
         return nomesGenerosDoItem(item, tipo).includes(generoSelecionado);
       });
@@ -264,16 +311,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const ordem = selectOrdem.value;
     if (ordem === "recentes") {
-      lista.sort((a, b) => new Date(b.release_date || b.first_air_date || 0) - new Date(a.release_date || a.first_air_date || 0));
+      lista.sort(
+        (a, b) =>
+          new Date(b.release_date || b.first_air_date || 0) -
+          new Date(a.release_date || a.first_air_date || 0),
+      );
     } else if (ordem === "antigos") {
-      lista.sort((a, b) => new Date(a.release_date || a.first_air_date || 0) - new Date(b.release_date || b.first_air_date || 0));
+      lista.sort(
+        (a, b) =>
+          new Date(a.release_date || a.first_air_date || 0) -
+          new Date(b.release_date || b.first_air_date || 0),
+      );
     } else if (ordem === "avaliados") {
       lista.sort((a, b) => b.vote_average - a.vote_average);
     }
 
-    // remove itens sem poster ANTES de contar, senão o contador conta um item
-    // que depois não vira card nenhum
-    lista = lista.filter(item => item.poster_path);
+    // remove itens sem poster ANTES de contar
+    lista = lista.filter((item) => item.poster_path);
 
     renderizarCards(lista);
 
@@ -282,26 +336,37 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  /* Monta o HTML de um card (usado no catálogo e no carrossel Explorar) */
+  function montarCardHtml({ poster, nome, ano, nota, rotulo }) {
+    return `
+      <div class="card__img-wrapper">
+        <img class="card__img" src="https://image.tmdb.org/t/p/w500${poster}" alt="${nome}" loading="lazy">
+        <span class="card__tipo">${rotulo}</span>
+      </div>
+      <div class="card__info">
+        <h3 class="card__titulo">${nome}</h3>
+        <p class="card__ano">${ano}</p>
+        <p class="card__nota">★ ${nota}</p>
+      </div>
+    `;
+  }
+
   function renderizarCards(lista) {
     grid.innerHTML = "";
-    lista.forEach(item => {
+    lista.forEach((item) => {
       const tipo = item.media_type === "tv" ? "serie" : "filme";
       const nome = item.title || item.name;
       const ano = (item.release_date || item.first_air_date || "").slice(0, 4);
 
       const card = document.createElement("div");
       card.className = "card";
-      card.innerHTML = `
-        <div class="card__poster-wrap">
-          <img class="card__poster" src="https://image.tmdb.org/t/p/w300${item.poster_path}" alt="${nome}" loading="lazy">
-          <span class="card__selo">${tipo === "serie" ? "SÉRIE" : "FILME"}</span>
-        </div>
-        <div class="card__info">
-          <p class="card__titulo">${nome}</p>
-          <p class="card__meta">${ano}</p>
-          <p class="card__nota">★ ${item.vote_average.toFixed(1)}</p>
-        </div>
-      `;
+      card.innerHTML = montarCardHtml({
+        poster: item.poster_path,
+        nome,
+        ano,
+        nota: item.vote_average.toFixed(1),
+        rotulo: tipo === "serie" ? "SÉRIE" : "FILME",
+      });
 
       card.addEventListener("click", () => abrirModal(item.id, tipo));
       grid.appendChild(card);
@@ -348,6 +413,7 @@ document.addEventListener("DOMContentLoaded", () => {
   carregarGeneros();
   carregarPopulares();
   carregarExplorar();
+  registrarEvento("page_view", { page_title: document.title });
 
   /* ===== EXPLORAR FILMES E SÉRIES (carrossel) ===== */
   async function carregarExplorar() {
@@ -355,30 +421,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const url = `${TMDB_BASE}?path=movie/top_rated&language=pt-BR`;
     const resposta = await fetch(url);
     const dados = await resposta.json();
-    const lista = dados.results.filter(item => item.poster_path);
+    const lista = dados.results.filter((item) => item.poster_path);
     renderizarExplorar(lista);
   }
 
   function renderizarExplorar(lista) {
     explorarCarrossel.innerHTML = "";
-    lista.forEach(item => {
+    lista.forEach((item) => {
       const tipo = "filme";
       const nome = item.title;
       const ano = (item.release_date || "").slice(0, 4);
 
       const card = document.createElement("div");
       card.className = "card";
-      card.innerHTML = `
-        <div class="card__poster-wrap">
-          <img class="card__poster" src="https://image.tmdb.org/t/p/w300${item.poster_path}" alt="${nome}" loading="lazy">
-          <span class="card__selo">FILME</span>
-        </div>
-        <div class="card__info">
-          <p class="card__titulo">${nome}</p>
-          <p class="card__meta">${ano}</p>
-          <p class="card__nota">★ ${item.vote_average.toFixed(1)}</p>
-        </div>
-      `;
+      card.innerHTML = montarCardHtml({
+        poster: item.poster_path,
+        nome,
+        ano,
+        nota: item.vote_average.toFixed(1),
+        rotulo: "FILME",
+      });
 
       card.addEventListener("click", () => abrirModal(item.id, tipo));
       explorarCarrossel.appendChild(card);
@@ -398,9 +460,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ===== FILTROS (Todo / Filmes / Séries) ===== */
-  botoesFiltro.forEach(botao => {
+  botoesFiltro.forEach((botao) => {
     botao.addEventListener("click", () => {
-      botoesFiltro.forEach(b => b.classList.remove("filtro--ativo"));
+      botoesFiltro.forEach((b) => b.classList.remove("filtro--ativo"));
       botao.classList.add("filtro--ativo");
       filtroTipoAtual = botao.dataset.filtro;
       aplicarFiltros();
@@ -411,7 +473,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (selectGenero) selectGenero.addEventListener("change", aplicarFiltros);
   if (selectOrdem) selectOrdem.addEventListener("change", aplicarFiltros);
 
-  /* ===== LOGO: se tiver busca, apaga; senão recarrega a página (F5) ===== */
+  /* ===== LOGO: se tiver busca, apaga; senão recarrega a página ===== */
   if (logoReload) {
     logoReload.addEventListener("click", () => {
       if (inputBusca && inputBusca.value.trim().length > 0) {
@@ -423,7 +485,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /* ===== MENU HAMBÚRGUER (mobile): abre/fecha o painel com busca + editar perfil ===== */
+  /* ===== MENU HAMBÚRGUER (mobile) ===== */
   function fecharMenuMobile() {
     if (headerMenu) headerMenu.classList.remove("aberto");
     if (btnMenuMobile) {
@@ -448,19 +510,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /* ===== BOTÃO "EDITAR PERFIL" LEVA ATÉ A PÁGINA DE PERFIL ===== */
+  /* ===== BOTÃO "EDITAR PERFIL" ===== */
   if (btnIrParaPerfil) {
     btnIrParaPerfil.addEventListener("click", () => {
       window.location.href = "/pages/editar.html";
     });
   }
 
-  /* ===== CARROSSEL DO BANNER PRINCIPAL =====
-     As 4 imagens são pré-carregadas assim que a página abre, então quando
-     o usuário clica em prev/next elas já estão em cache — sem espera pra
-     baixar. A troca usa um fade suave (opacidade) em vez de trocar o src
-     "a seco", que causava aquele salto/travada perceptível. */
-  imagensBanner.forEach(src => {
+  /* ===== CARROSSEL DO BANNER PRINCIPAL ===== */
+  imagensBanner.forEach((src) => {
     const preCarga = new Image();
     preCarga.src = src;
   });
@@ -478,7 +536,7 @@ document.addEventListener("DOMContentLoaded", () => {
       trocandoSlide = false;
     }, 150);
 
-    dots.forEach(dot => dot.classList.remove("active"));
+    dots.forEach((dot) => dot.classList.remove("active"));
     if (dots[indice]) dots[indice].classList.add("active");
     indiceAtual = indice;
   }
@@ -497,7 +555,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  dots.forEach(dot => {
+  dots.forEach((dot) => {
     dot.addEventListener("click", () => {
       mostrarSlide(Number(dot.dataset.index));
     });
@@ -520,12 +578,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /* ===== LOGIN COM GOOGLE =====
-     Guarda o usuário logado em "starcine_usuario":
-     { primeiroNome, nomeCompleto, email, foto, nomeEditado }
-     "nomeEditado" fica null até o usuário mudar o nome na página de perfil;
-     enquanto for null, mostramos o primeiro nome vindo do Google. */
-  const GOOGLE_CLIENT_ID = "938643209629-plb7sdmh52qkuosl8hqnscfvu5u7kjdb.apps.googleusercontent.com";
+  /* ===== LOGIN COM GOOGLE (Google Identity Services) =====
+     O Client ID do OAuth é público (aparece no HTML de qualquer site
+     que usa o botão do Google), então pode ficar no código. */
+  const GOOGLE_CLIENT_ID = "COLE_AQUI_SEU_GOOGLE_OAUTH_CLIENT_ID";
   const CHAVE_USUARIO = "starcine_usuario";
   const CHAVE_PERFIL = "starcine_perfil"; // mesma chave usada no perfil.js
 
@@ -557,8 +613,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const usuario = carregarUsuario();
     if (usuario) {
       const perfil = carregarPerfilLocal();
-      const fotoParaMostrar = (perfil && perfil.fotoManual && perfil.foto) ? perfil.foto : usuario.foto;
-      const nomeParaMostrar = (perfil && perfil.nomeManual && perfil.nome) ? perfil.nome : (usuario.nomeEditado || usuario.primeiroNome);
+      const fotoParaMostrar =
+        perfil && perfil.fotoManual && perfil.foto ? perfil.foto : usuario.foto;
+      const nomeParaMostrar =
+        perfil && perfil.nomeManual && perfil.nome
+          ? perfil.nome
+          : usuario.nomeEditado || usuario.primeiroNome;
 
       userAvatar.src = fotoParaMostrar;
       userAvatar.classList.add("header__user-img--logado");
@@ -571,14 +631,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Decodifica o token JWT que o Google devolve (sem precisar de biblioteca extra)
+  // Decodifica o token JWT que o Google devolve
   function decodificarJwt(token) {
     const payloadBase64 = token.split(".")[1];
     const payloadJson = decodeURIComponent(
       atob(payloadBase64.replace(/-/g, "+").replace(/_/g, "/"))
         .split("")
-        .map(c => "%" + c.charCodeAt(0).toString(16).padStart(2, "0"))
-        .join("")
+        .map((c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0"))
+        .join(""),
     );
     return JSON.parse(payloadJson);
   }
@@ -588,16 +648,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const usuarioExistente = carregarUsuario();
 
     const usuario = {
-      primeiroNome: dados.given_name || (dados.name ? dados.name.split(" ")[0] : "Usuário"),
+      primeiroNome:
+        dados.given_name || (dados.name ? dados.name.split(" ")[0] : "Usuário"),
       nomeCompleto: dados.name || "",
       email: dados.email || "",
       foto: dados.picture || "/svgs/user-icon.svg",
       // preserva qualquer edição manual feita antes na página de perfil
-      nomeEditado: usuarioExistente ? usuarioExistente.nomeEditado : null
+      nomeEditado: usuarioExistente ? usuarioExistente.nomeEditado : null,
     };
 
     salvarUsuario(usuario);
     atualizarHeaderUsuario();
+    registrarEvento("login", { method: "google" });
 
     const modalLoginAtual = document.getElementById("modalLogin");
     if (modalLoginAtual) modalLoginAtual.classList.remove("ativo");
@@ -617,7 +679,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!googleJaInicializado) {
         google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
-          callback: aoLogarComGoogle
+          callback: aoLogarComGoogle,
         });
         googleJaInicializado = true;
       }
@@ -626,7 +688,7 @@ document.addEventListener("DOMContentLoaded", () => {
           theme: "filled_black",
           size: "large",
           shape: "pill",
-          text: "signin_with"
+          text: "signin_with",
         });
         botaoGoogleJaRenderizado = true;
       }
@@ -652,7 +714,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* ===== DROPDOWN DO USUÁRIO (Meu perfil / Trocar de conta / Sair) ===== */
+  /* ===== DROPDOWN DO USUÁRIO ===== */
   const userDropdown = document.getElementById("userDropdown");
   const btnVerPerfil = document.getElementById("btnVerPerfil");
   const btnTrocarConta = document.getElementById("btnTrocarConta");
@@ -668,12 +730,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function sairDaConta() {
     localStorage.removeItem(CHAVE_USUARIO);
-    // impede que o Google faça login automático de novo com a última conta
+    // impede login automático de novo com a última conta
     if (window.google && google.accounts && google.accounts.id) {
       google.accounts.id.disableAutoSelect();
     }
     atualizarHeaderUsuario();
     fecharDropdownUsuario();
+    registrarEvento("logout");
   }
 
   if (btnVerPerfil) {
@@ -694,8 +757,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnTrocarConta.addEventListener("click", (e) => {
       e.stopPropagation();
       sairDaConta();
-      // reabre o login pra escolher outra conta — se o navegador tiver mais
-      // de uma conta Google logada, o seletor de contas aparece de novo
       abrirModalLogin();
     });
   }
@@ -723,5 +784,4 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   atualizarHeaderUsuario();
-
 });
