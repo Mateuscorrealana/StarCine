@@ -1,6 +1,7 @@
 import { auth, db, googleProvider } from "/js/firebase-init.js";
 import {
   signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
@@ -651,7 +652,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  console.log("[StarCine] checando se voltou de um redirecionamento de login...");
+  getRedirectResult(auth)
+    .then((resultado) => {
+      if (resultado && resultado.user) {
+        console.log("[StarCine] login por redirecionamento OK:", resultado.user.email);
+      } else {
+        console.log("[StarCine] getRedirectResult não trouxe usuário (normal se não veio de um login agora)");
+      }
+    })
+    .catch((erro) => {
+      console.error("[StarCine] ERRO no getRedirectResult:", erro.code, erro.message);
+    });
+
   onAuthStateChanged(auth, async (user) => {
+    console.log("[StarCine] onAuthStateChanged disparou. Usuário:", user ? user.email : "nenhum (deslogado)");
     usuarioAtual = user;
 
     if (!user) {
