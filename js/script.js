@@ -1,7 +1,6 @@
 import { auth, db, googleProvider } from "/js/firebase-init.js";
 import {
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
@@ -562,15 +561,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function fazerLoginComGoogle() {
-    console.log("[StarCine] botão de login clicado, chamando signInWithRedirect...");
     if (modalLoginErro) modalLoginErro.textContent = "";
     try {
-      // signInWithRedirect leva a página inteira pro login do Google e
-      // volta depois — mais confiável que popup, principalmente no mobile.
-      // O onAuthStateChanged lá embaixo cuida de atualizar a tela quando
-      // a pessoa voltar já logada.
-      await signInWithRedirect(auth, googleProvider);
-      console.log("[StarCine] signInWithRedirect não deveria chegar aqui (a página deveria ter navegado)");
+      const resultado = await signInWithPopup(auth, googleProvider);
+      console.log("[StarCine] login OK:", resultado.user.email);
+      fecharModalLogin();
     } catch (erro) {
       console.error("[StarCine] Erro no login com Google:", erro);
       if (modalLoginErro) modalLoginErro.textContent = mensagemErroLogin(erro);
@@ -651,19 +646,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return null;
     }
   }
-
-  console.log("[StarCine] checando se voltou de um redirecionamento de login...");
-  getRedirectResult(auth)
-    .then((resultado) => {
-      if (resultado && resultado.user) {
-        console.log("[StarCine] login por redirecionamento OK:", resultado.user.email);
-      } else {
-        console.log("[StarCine] getRedirectResult não trouxe usuário (normal se não veio de um login agora)");
-      }
-    })
-    .catch((erro) => {
-      console.error("[StarCine] ERRO no getRedirectResult:", erro.code, erro.message);
-    });
 
   onAuthStateChanged(auth, async (user) => {
     console.log("[StarCine] onAuthStateChanged disparou. Usuário:", user ? user.email : "nenhum (deslogado)");

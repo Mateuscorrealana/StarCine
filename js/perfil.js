@@ -1,6 +1,6 @@
 import { auth, db, googleProvider } from "/js/firebase-init.js";
 import {
-  signInWithRedirect,
+  signInWithPopup,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
@@ -98,11 +98,33 @@ document.addEventListener("DOMContentLoaded", () => {
     if (modalLogin) modalLogin.classList.remove("ativo");
   }
 
+  const modalLoginErro = document.getElementById("modalLoginErro");
+
+  function mensagemErroLogin(erro) {
+    const codigo = erro && erro.code;
+    if (codigo === "auth/unauthorized-domain") {
+      return "Este domínio não está autorizado no Firebase (Authentication → Settings → Authorized domains).";
+    }
+    if (codigo === "auth/operation-not-allowed") {
+      return "Login com Google não está ativado no Firebase (Authentication → Sign-in method).";
+    }
+    if (codigo === "auth/popup-blocked" || codigo === "auth/cancelled-popup-request") {
+      return "O navegador bloqueou o login. Tenta de novo.";
+    }
+    if (codigo === "auth/network-request-failed") {
+      return "Sem conexão com o Firebase. Confere sua internet.";
+    }
+    return `Não deu pra fazer login (${codigo || "erro desconhecido"}). Tenta de novo.`;
+  }
+
   async function fazerLoginComGoogle() {
+    if (modalLoginErro) modalLoginErro.textContent = "";
     try {
-      await signInWithRedirect(auth, googleProvider);
+      await signInWithPopup(auth, googleProvider);
+      fecharModalLogin();
     } catch (erro) {
       console.error("Erro no login com Google:", erro);
+      if (modalLoginErro) modalLoginErro.textContent = mensagemErroLogin(erro);
     }
   }
 
