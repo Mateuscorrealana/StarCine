@@ -661,23 +661,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // grava/atualiza os dados básicos do Google no Firestore, sem
     // sobrescrever nome/foto que a pessoa já personalizou no perfil
-    const perfilExistente = await buscarPerfilFirestore(user.uid);
-    if (!perfilExistente) {
-      await setDoc(doc(db, "usuarios", user.uid), {
-        nome: user.displayName || "Usuário",
-        foto: user.photoURL || "/svgs/user-icon.svg",
-        cor: "#1c1a17",
-        email: user.email || "",
-        nomeManual: false,
-        fotoManual: false,
-        membroDesde: new Date().toISOString()
-      });
-    }
+    try {
+      const perfilExistente = await buscarPerfilFirestore(user.uid);
+      if (!perfilExistente) {
+        await setDoc(doc(db, "usuarios", user.uid), {
+          nome: user.displayName || "Usuário",
+          foto: user.photoURL || "/svgs/user-icon.svg",
+          cor: "#1c1a17",
+          email: user.email || "",
+          nomeManual: false,
+          fotoManual: false,
+          membroDesde: new Date().toISOString()
+        });
+      }
 
-    const perfil = perfilExistente || await buscarPerfilFirestore(user.uid);
-    userAvatar.src = (perfil && perfil.foto) ? perfil.foto : (user.photoURL || "/svgs/user-icon.svg");
-    userAvatar.classList.add("header__user-img--logado");
-    userNomeEl.textContent = (perfil && perfil.nome) ? perfil.nome : (user.displayName || "");
+      const perfil = perfilExistente || await buscarPerfilFirestore(user.uid);
+      userAvatar.src = (perfil && perfil.foto) ? perfil.foto : (user.photoURL || "/svgs/user-icon.svg");
+      userAvatar.classList.add("header__user-img--logado");
+      userNomeEl.textContent = (perfil && perfil.nome) ? perfil.nome : (user.displayName || "");
+    } catch (erro) {
+      console.error("[StarCine] Erro ao ler/criar perfil no Firestore (confira as Regras do Firestore):", erro);
+    }
   });
 
 });
