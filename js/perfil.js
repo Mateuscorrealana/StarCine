@@ -1,6 +1,6 @@
 import { auth, db, googleProvider } from "/js/firebase-init.js";
 import {
-  signInWithPopup,
+  signInWithRedirect,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
@@ -100,8 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function fazerLoginComGoogle() {
     try {
-      await signInWithPopup(auth, googleProvider);
-      fecharModalLogin();
+      await signInWithRedirect(auth, googleProvider);
     } catch (erro) {
       console.error("Erro no login com Google:", erro);
     }

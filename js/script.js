@@ -1,6 +1,6 @@
 import { auth, db, googleProvider } from "/js/firebase-init.js";
 import {
-  signInWithPopup,
+  signInWithRedirect,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
@@ -543,8 +543,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function fazerLoginComGoogle() {
     try {
-      await signInWithPopup(auth, googleProvider);
-      fecharModalLogin();
+      // signInWithRedirect leva a página inteira pro login do Google e
+      // volta depois — mais confiável que popup, principalmente no mobile.
+      // O onAuthStateChanged lá embaixo cuida de atualizar a tela quando
+      // a pessoa voltar já logada.
+      await signInWithRedirect(auth, googleProvider);
     } catch (erro) {
       console.error("Erro no login com Google:", erro);
     }
