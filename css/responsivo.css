@@ -113,6 +113,8 @@
 
 .header__user {
   position: relative;
+  right: 10px;
+  top: 0;
 }
 
 .header__user-dropdown {
