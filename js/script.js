@@ -1,44 +1,34 @@
-/* Ajustado: robustez + performance/memory
-   Mantive a estrutura original, mas:
-   - centralizei fetchs (fetchTmdb) com timeout
-   - tratei erros de rede/resposta
-   - cache de localStorage para evitar reparses
-   - renderização com DocumentFragment e criação segura de elementos
-   - debounce reutilizável ligado ao timeout existente
-*/
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-analytics.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyC5B2Q9q1vpSJYMAwhl3MNLAnz8EIfoamo",
-  authDomain: "starcine-d29ea.firebaseapp.com",
-  projectId: "starcine-d29ea",
-  storageBucket: "starcine-d29ea.firebasestorage.app",
-  messagingSenderId: "875320488841",
-  appId: "1:875320488841:web:dd1f2442b0b5526c7ea758",
-  measurementId: "G-3Z8HF8B86K"
-};
-
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+import { auth, db, googleProvider } from "/js/firebase-init.js";
+import {
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 
 document.addEventListener("DOMContentLoaded", () => {
 
-  // A chamada agora vai para a SUA função serverless (/api/tmdb).
+  // A chamada vai para a SUA função serverless (/api/tmdb), que guarda a
+  // chave da TMDB no servidor (variável de ambiente TMDB_API_KEY). O
+  // navegador nunca vê a chave da TMDB.
   const TMDB_BASE = "/api/tmdb";
 
-  // DOM nodes (alguns podem não existir em todas as páginas)
   const grid = document.getElementById("grid-catalogo");
   const inputBusca = document.querySelector(".header__search-input");
   const contadorTitulos = document.getElementById("contadorTitulos");
   const botoesFiltro = document.querySelectorAll(".filtro");
   const selectGenero = document.getElementById("selectGenero");
   const selectOrdem = document.getElementById("selectOrdem");
+  /* ===== MENU HAMBÚRGUER (mobile) ===== */
   const btnMenuMobile = document.getElementById("btnMenuMobile");
   const headerMenu = document.getElementById("headerMenu");
+
   const logoReload = document.getElementById("logoReload");
-  const btnIrParaPerfil = document.getElementById("btnIrParaPerfil");
   const imgPrincipal = document.getElementById("imgPrincipal");
   const dots = document.querySelectorAll("#dots span");
   const btnNext = document.getElementById("btnNext");
@@ -58,15 +48,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const explorarPrev = document.getElementById("explorarPrev");
   const explorarNext = document.getElementById("explorarNext");
 
-  const CHAVE_AVALIACOES = "starcine_avaliacoes";
-  let itemAberto = null;   // { id, tipo, nome, poster }
+  let itemAberto = null;   // { id, tipo, nome, poster } do item atual no modal
   let notaSelecionada = 0;
+  let usuarioAtual = null; // preenchido pelo onAuthStateChanged do Firebase
 
   let listaAtual = [];       // últimos resultados crus vindos da API
   let filtroTipoAtual = "todo"; // todo | filme | serie
   let generosMovie = {};     // { id: nome } - gêneros de filme
   let generosTV = {};        // { id: nome } - gêneros de série
-  let timeout = null;
+  let timeout;
   let indiceAtual = 0;
 
   const imagensBanner = [
@@ -76,444 +66,20 @@ document.addEventListener("DOMContentLoaded", () => {
     "/img-principal/img-principal4.png",
   ];
 
-  // --- Caches de localStorage para performance ---
-  let avaliacoesCache = null; // null => ainda não carregado
-  let usuarioCache = null;
-  let perfilCache = null;
-
-  // --- Helpers: localStorage com cache ---
-  function carregarAvaliacoes() {
-    if (avaliacoesCache !== null) return avaliacoesCache;
-    try {
-      avaliacoesCache = JSON.parse(localStorage.getItem(CHAVE_AVALIACOES)) || [];
-    } catch {
-      avaliacoesCache = [];
-    }
-    return avaliacoesCache;
-  }
-
-  function salvarAvaliacoes(lista) {
-    avaliacaoSafeWrite(lista);
-  }
-
-  function avaliacaoSafeWrite(lista) {
-    try {
-      localStorage.setItem(CHAVE_AVALIACOES, JSON.stringify(lista));
-      avaliacoesCache = lista;
-    } catch (err) {
-      console.error("Erro ao salvar avaliações no localStorage:", err);
-    }
-  }
-
-  function buscarAvaliacaoExistente(id, tipo) {
-    const arr = carregarAvaliacoes();
-    return arr.find(a => a.id === id && a.tipo === tipo);
-  }
-
-  // Usuario / Perfil cache
-  const GOOGLE_CLIENT_ID = "938643209629-plb7sdmh52qkuosl8hqnscfvu5u7kjdb.apps.googleusercontent.com";
-  const CHAVE_USUARIO = "starcine_usuario";
-  const CHAVE_PERFIL = "starcine_perfil";
-
-  function carregarUsuario() {
-    if (usuarioCache !== null) return usuarioCache;
-    try {
-      usuarioCache = JSON.parse(localStorage.getItem(CHAVE_USUARIO));
-    } catch {
-      usuarioCache = null;
-    }
-    return usuarioCache;
-  }
-  function salvarUsuario(usuario) {
-    try {
-      localStorage.setItem(CHAVE_USUARIO, JSON.stringify(usuario));
-      usuarioCache = usuario;
-    } catch (err) {
-      console.error("Erro ao salvar usuário:", err);
-    }
-  }
-  function carregarPerfilLocal() {
-    if (perfilCache !== null) return perfilCache;
-    try {
-      perfilCache = JSON.parse(localStorage.getItem(CHAVE_PERFIL));
-    } catch {
-      perfilCache = null;
-    }
-    return perfilCache;
-  }
-
-  // --- Helper: timeout + fetch centralizado para TMDB proxied ---
-  async function fetchTmdb(path, params = {}, timeoutMs = 10000) {
-    try {
-      const url = new URL(TMDB_BASE, location.origin);
-      url.searchParams.set("path", path);
-      for (const key in params) {
-        if (Object.prototype.hasOwnProperty.call(params, key) && params[key] !== undefined) {
-          url.searchParams.set(key, params[key]);
-        }
-      }
-
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), timeoutMs);
-
-      const res = await fetch(url.toString(), { signal: controller.signal });
-      clearTimeout(id);
-      if (!res.ok) {
-        // tenta extrair mensagem de erro da API, se houver
-        let text;
-        try { text = await res.text(); } catch { text = res.statusText; }
-        throw new Error(`TMDB fetch falhou: ${res.status} ${res.statusText} - ${text}`);
-      }
-      return await res.json();
-    } catch (err) {
-      if (err.name === "AbortError") {
-        throw new Error("A requisição para TMDB expirou (timeout).");
-      }
-      throw err;
-    }
-  }
-
-  // --- Util: nomes de gêneros para um item ---
-  function nomesGenerosDoItem(item, tipo) {
-    const mapa = tipo === "serie" ? generosTV : generosMovie;
-    return (item.genre_ids || []).map(id => mapa[id]).filter(Boolean);
-  }
-
-  // --- Estrelas / Avaliação UI ---
-  function pintarEstrelas(nota) {
-    if (!estrelasContainer) return;
-    const estrelas = estrelasContainer.querySelectorAll("span");
-    estrelas.forEach(estrela => {
-      const valor = Number(estrela.dataset.valor || 0);
-      estrela.classList.toggle("preenchida", valor <= nota);
-    });
-  }
-
-  if (estrelasContainer) {
-    estrelasContainer.querySelectorAll("span").forEach(estrela => {
-      const onClick = () => {
-        notaSelecionada = Number(estrela.dataset.valor || 0);
-        pintarEstrelas(notaSelecionada);
-      };
-      const onEnter = () => {
-        pintarEstrelas(Number(estrela.dataset.valor || 0));
-      };
-      estrela.addEventListener("click", onClick);
-      estrela.addEventListener("mouseenter", onEnter);
-    });
-
-    estrelasContainer.addEventListener("mouseleave", () => {
-      pintarEstrelas(notaSelecionada);
-    });
-  }
-
-  if (btnSalvarAvaliacao) {
-    btnSalvarAvaliacao.addEventListener("click", () => {
-      if (!itemAberto) return;
-
-      if (notaSelecionada === 0) {
-        if (modalSalvoMsg) {
-          modalSalvoMsg.textContent = "Escolha de 1 a 5 estrelas antes de salvar.";
-          modalSalvoMsg.style.color = "#e07a7a";
-        }
-        return;
-      }
-
-      const avaliacoes = carregarAvaliacoes();
-      const existente = avaliacoes.findIndex(a => a.id === itemAberto.id && a.tipo === itemAberto.tipo);
-
-      const registro = {
-        id: itemAberto.id,
-        tipo: itemAberto.tipo,
-        nome: itemAberto.nome,
-        poster: itemAberto.poster,
-        nota: notaSelecionada,
-        comentario: modalComentario ? modalComentario.value.trim() : "",
-        data: new Date().toISOString()
-      };
-
-      if (existente >= 0) {
-        avaliacoes[existente] = registro;
-      } else {
-        avaliacoes.push(registro);
-      }
-
-      salvarAvaliacoes(avaliacoes);
-      if (modalSalvoMsg) {
-        modalSalvoMsg.style.color = "#6fcf6f";
-        modalSalvoMsg.textContent = "Avaliação salva no seu perfil!";
-      }
-    });
-  }
-
-  // --- MODAL ---
-  async function abrirModal(id, tipo) {
-    if (!modal) return;
-    try {
-      const endpoint = tipo === "serie" ? "tv" : "movie";
-      const item = await fetchTmdb(`${endpoint}/${id}`, { language: "pt-BR" });
-
-      const nome = item.title || item.name || "Sem título";
-      const ano = (item.release_date || item.first_air_date || "").slice(0, 4);
-      const generos = (item.genres || []).map(g => g.name).join(", ");
-
-      if (modalPoster) {
-        modalPoster.src = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "/img/no-poster.png";
-        modalPoster.alt = nome;
-      }
-      if (modalTitulo) modalTitulo.textContent = nome;
-      if (modalMeta) modalMeta.textContent = `${ano} • ${generos} • ★ ${(item.vote_average || 0).toFixed(1)}`;
-      if (modalDescricao) modalDescricao.textContent = item.overview || "Sem descrição disponível.";
-
-      itemAberto = { id, tipo, nome, poster: item.poster_path };
-
-      // preencher avaliação existente, se houver
-      const existente = buscarAvaliacaoExistente(id, tipo);
-      notaSelecionada = existente ? existente.nota : 0;
-      if (modalComentario) modalComentario.value = existente ? existente.comentario : "";
-      if (modalSalvoMsg) modalSalvoMsg.textContent = "";
-      pintarEstrelas(notaSelecionada);
-
-      modal.classList.add("ativo");
-
-      // foco no modal para acessibilidade (se houver elemento focalizável)
-      try {
-        const focoEl = modal.querySelector("button, [tabindex], input, textarea");
-        if (focoEl) focoEl.focus();
-      } catch (err) { /* safe ignore */ }
-    } catch (err) {
-      console.error("Erro ao abrir modal:", err);
-      if (modalDescricao) modalDescricao.textContent = "Erro ao carregar detalhes. Tente novamente.";
-      if (modal) modal.classList.add("ativo");
-    }
-  }
-
-  function fecharModal() {
-    if (!modal) return;
-    modal.classList.remove("ativo");
-    // retorno de foco não implementado (poderia focar o card clicado se armazenado)
-  }
-
-  if (modalOverlay) modalOverlay.addEventListener("click", fecharModal);
-  if (modalFechar) modalFechar.addEventListener("click", fecharModal);
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && modal && modal.classList.contains("ativo")) {
-      fecharModal();
-    }
-  });
-
-  // --- BUSCAS / CATÁLOGO ---
-  async function carregarPopulares() {
-    try {
-      const dados = await fetchTmdb("trending/all/week", { language: "pt-BR" });
-      listaAtual = (dados.results || []).filter(item => item.media_type !== "person");
-      aplicarFiltros();
-    } catch (err) {
-      console.error("Erro ao carregar populares:", err);
-      // fallback: limpa lista atual e renderiza vazio
-      listaAtual = [];
-      aplicarFiltros();
-    }
-  }
-
-  async function buscar(termo) {
-    try {
-      if (!termo) {
-        await carregarPopulares();
-        return;
-      }
-      const dados = await fetchTmdb("search/multi", { language: "pt-BR", query: termo });
-      listaAtual = (dados.results || []).filter(item => item.media_type !== "person");
-      aplicarFiltros();
-    } catch (err) {
-      console.error("Erro na busca:", err);
-      listaAtual = [];
-      aplicarFiltros();
-    }
-  }
-
-  function aplicarFiltros() {
-    let lista = [...listaAtual];
-
-    if (filtroTipoAtual !== "todo") {
-      lista = lista.filter(item => {
-        const tipo = item.media_type === "tv" ? "serie" : "filme";
-        return tipo === filtroTipoAtual;
-      });
-    }
-
-    const generoSelecionado = selectGenero ? selectGenero.value : "todos";
-    if (generoSelecionado !== "todos") {
-      lista = lista.filter(item => {
-        const tipo = item.media_type === "tv" ? "serie" : "filme";
-        return nomesGenerosDoItem(item, tipo).includes(generoSelecionado);
-      });
-    }
-
-    const ordem = selectOrdem ? selectOrdem.value : "";
-    if (ordem === "recentes") {
-      lista.sort((a, b) => new Date(b.release_date || b.first_air_date || 0) - new Date(a.release_date || a.first_air_date || 0));
-    } else if (ordem === "antigos") {
-      lista.sort((a, b) => new Date(a.release_date || a.first_air_date || 0) - new Date(b.release_date || b.first_air_date || 0));
-    } else if (ordem === "avaliados") {
-      lista.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
-    }
-
-    // remove itens sem poster ANTES de contar
-    lista = lista.filter(item => item.poster_path);
-
-    renderizarCards(lista);
-
-    if (contadorTitulos) {
-      const n = lista.length;
-      contadorTitulos.textContent = `${n} Título${n === 1 ? "" : "s"}`;
-    }
-  }
-
-  function criarCardDOM(item) {
-    const tipo = item.media_type === "tv" ? "serie" : "filme";
-    const nome = item.title || item.name || "";
-    const ano = (item.release_date || item.first_air_date || "").slice(0, 4);
-
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const posterWrap = document.createElement("div");
-    posterWrap.className = "card__poster-wrap";
-
-    const img = document.createElement("img");
-    img.className = "card__poster";
-    img.loading = "lazy";
-    img.src = item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : "/img/no-poster.png";
-    img.alt = nome;
-
-    const selo = document.createElement("span");
-    selo.className = "card__selo";
-    selo.textContent = tipo === "serie" ? "SÉRIE" : "FILME";
-
-    posterWrap.appendChild(img);
-    posterWrap.appendChild(selo);
-
-    const info = document.createElement("div");
-    info.className = "card__info";
-
-    const tituloP = document.createElement("p");
-    tituloP.className = "card__titulo";
-    tituloP.textContent = nome;
-
-    const metaP = document.createElement("p");
-    metaP.className = "card__meta";
-    metaP.textContent = ano;
-
-    const notaP = document.createElement("p");
-    notaP.className = "card__nota";
-    notaP.textContent = `★ ${(item.vote_average || 0).toFixed(1)}`;
-
-    info.appendChild(tituloP);
-    info.appendChild(metaP);
-    info.appendChild(notaP);
-
-    card.appendChild(posterWrap);
-    card.appendChild(info);
-
-    card.addEventListener("click", () => abrirModal(item.id, tipo));
-    return card;
-  }
-
-  function renderizarCards(lista) {
-    if (!grid) return;
-    grid.innerHTML = "";
-    const frag = document.createDocumentFragment();
-    for (const item of lista) {
-      try {
-        frag.appendChild(criarCardDOM(item));
-      } catch (err) {
-        console.error("Erro ao renderizar card:", err, item);
-      }
-    }
-    grid.appendChild(frag);
-  }
-
-  // --- BUSCA: debounce e eventos Enter/icone ---
-  const iconeBusca = document.querySelector(".header__search-icon");
-
-  function executarBusca() {
-    const termo = inputBusca ? inputBusca.value.trim() : "";
-    if (termo.length > 0) {
-      buscar(termo);
-    } else {
-      carregarPopulares();
-    }
-  }
-
-  // debounce central, usando timeout var definida no escopo superior
-  function debounceFn(fn, wait) {
-    return (...args) => {
-      if (timeout) {
-        clearTimeout(timeout);
-        timeout = null;
-      }
-      timeout = setTimeout(() => {
-        timeout = null;
-        fn(...args);
-      }, wait);
-    };
-  }
-
-  if (inputBusca) {
-    inputBusca.addEventListener("input", debounceFn(() => {
-      const termo = inputBusca.value.trim();
-      if (termo.length > 2) buscar(termo);
-      else carregarPopulares();
-    }, 400));
-
-    inputBusca.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        if (timeout) {
-          clearTimeout(timeout);
-          timeout = null;
-        }
-        executarBusca();
-      }
-    });
-  }
-
-  if (iconeBusca) {
-    iconeBusca.addEventListener("click", () => {
-      if (timeout) {
-        clearTimeout(timeout);
-        timeout = null;
-      }
-      executarBusca();
-    });
-  }
-
-  // carrega gêneros e popula o select (se existir)
+  /* ===== GÊNEROS (popula o select) ===== */
   async function carregarGeneros() {
     try {
-      const [dMovie, dTV] = await Promise.all([
-        fetchTmdb("genre/movie/list", { language: "pt-BR" }),
-        fetchTmdb("genre/tv/list", { language: "pt-BR" })
+      const [rMovie, rTV] = await Promise.all([
+        fetch(`${TMDB_BASE}?path=genre/movie/list&language=pt-BR`),
+        fetch(`${TMDB_BASE}?path=genre/tv/list&language=pt-BR`)
       ]);
+      const dMovie = await rMovie.json();
+      const dTV = await rTV.json();
 
-      (dMovie.genres || []).forEach(g => { generosMovie[g.id] = g.name; });
-      (dTV.genres || []).forEach(g => { generosTV[g.id] = g.name; });
+      dMovie.genres.forEach(g => generosMovie[g.id] = g.name);
+      dTV.genres.forEach(g => generosTV[g.id] = g.name);
 
-      if (!selectGenero) return;
-
-      // nomes únicos
-      const nomesUnicos = [...new Set([
-        ...Object.values(generosMovie),
-        ...Object.values(generosTV)
-      ])].sort();
-
-      // limpa e adiciona opção "todos"
-      selectGenero.innerHTML = "";
-      const optAll = document.createElement("option");
-      optAll.value = "todos";
-      optAll.textContent = "Todos";
-      selectGenero.appendChild(optAll);
+      const nomesUnicos = [...new Set([...Object.values(generosMovie), ...Object.values(generosTV)])].sort();
 
       nomesUnicos.forEach(nome => {
         const opt = document.createElement("option");
@@ -526,70 +92,304 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // --- EXPLORAR (carrossel) ---
-  async function carregarExplorar() {
-    if (!explorarCarrossel) return;
-    try {
-      const dados = await fetchTmdb("movie/top_rated", { language: "pt-BR" });
-      const lista = (dados.results || []).filter(item => item.poster_path);
-      renderizarExplorar(lista);
-    } catch (err) {
-      console.error("Erro ao carregar explorar:", err);
-      explorarCarrossel.innerHTML = "";
+  function nomesGenerosDoItem(item, tipo) {
+    const mapa = tipo === "serie" ? generosTV : generosMovie;
+    return (item.genre_ids || []).map(id => mapa[id]).filter(Boolean);
+  }
+
+  /* ===== AVALIAÇÕES (Firestore, vinculadas ao usuário logado) =====
+     Coleção "avaliacoes", um documento por (usuário + filme/série), com
+     ID determinístico "uid_tipo_id" — assim salvar de novo sobre o mesmo
+     item atualiza o documento em vez de duplicar. */
+  function idAvaliacao(uid, tipo, id) {
+    return `${uid}_${tipo}_${id}`;
+  }
+
+  async function buscarAvaliacaoExistente(id, tipo) {
+    if (!usuarioAtual) return null;
+    const ref = doc(db, "avaliacoes", idAvaliacao(usuarioAtual.uid, tipo, id));
+    const snap = await getDoc(ref);
+    return snap.exists() ? snap.data() : null;
+  }
+
+  async function salvarAvaliacao(registro) {
+    const ref = doc(db, "avaliacoes", idAvaliacao(usuarioAtual.uid, registro.tipo, registro.id));
+    await setDoc(ref, {
+      ...registro,
+      uid: usuarioAtual.uid,
+      data: new Date().toISOString(),
+      atualizadoEm: serverTimestamp()
+    });
+  }
+
+  function pintarEstrelas(nota) {
+    if (!estrelasContainer) return;
+    const estrelas = estrelasContainer.querySelectorAll("span");
+    estrelas.forEach(estrela => {
+      const valor = Number(estrela.dataset.valor);
+      estrela.classList.toggle("preenchida", valor <= nota);
+    });
+  }
+
+  if (estrelasContainer) {
+    estrelasContainer.querySelectorAll("span").forEach(estrela => {
+      estrela.addEventListener("click", () => {
+        notaSelecionada = Number(estrela.dataset.valor);
+        pintarEstrelas(notaSelecionada);
+      });
+      estrela.addEventListener("mouseenter", () => {
+        pintarEstrelas(Number(estrela.dataset.valor));
+      });
+    });
+
+    estrelasContainer.addEventListener("mouseleave", () => {
+      pintarEstrelas(notaSelecionada);
+    });
+  }
+
+  if (btnSalvarAvaliacao) {
+    btnSalvarAvaliacao.addEventListener("click", async () => {
+      if (!itemAberto) return;
+
+      if (!usuarioAtual) {
+        modalSalvoMsg.style.color = "#e07a7a";
+        modalSalvoMsg.textContent = "Faça login pra salvar sua avaliação.";
+        return;
+      }
+
+      if (notaSelecionada === 0) {
+        modalSalvoMsg.style.color = "#e07a7a";
+        modalSalvoMsg.textContent = "Escolha de 1 a 5 estrelas antes de salvar.";
+        return;
+      }
+
+      btnSalvarAvaliacao.disabled = true;
+      try {
+        await salvarAvaliacao({
+          id: itemAberto.id,
+          tipo: itemAberto.tipo,
+          nome: itemAberto.nome,
+          poster: itemAberto.poster,
+          nota: notaSelecionada,
+          comentario: modalComentario.value.trim()
+        });
+        modalSalvoMsg.style.color = "#6fcf6f";
+        modalSalvoMsg.textContent = "Avaliação salva no seu perfil!";
+      } catch (erro) {
+        console.error("Erro ao salvar avaliação:", erro);
+        modalSalvoMsg.style.color = "#e07a7a";
+        modalSalvoMsg.textContent = "Não deu pra salvar agora, tenta de novo.";
+      } finally {
+        btnSalvarAvaliacao.disabled = false;
+      }
+    });
+  }
+
+  /* ===== MODAL DE DETALHES ===== */
+  async function abrirModal(id, tipo) {
+    const endpoint = tipo === "serie" ? "tv" : "movie";
+    const url = `${TMDB_BASE}?path=${endpoint}/${id}&language=pt-BR`;
+    const resposta = await fetch(url);
+    const item = await resposta.json();
+
+    const nome = item.title || item.name;
+    const ano = (item.release_date || item.first_air_date || "").slice(0, 4);
+    const generos = item.genres.map(g => g.name).join(", ");
+
+    modalPoster.src = `https://image.tmdb.org/t/p/w500${item.poster_path}`;
+    modalPoster.alt = nome;
+    modalTitulo.textContent = nome;
+    modalMeta.textContent = `${ano} • ${generos} • ★ ${item.vote_average.toFixed(1)}`;
+    modalDescricao.textContent = item.overview || "Sem descrição disponível.";
+
+    itemAberto = { id, tipo, nome, poster: item.poster_path };
+
+    notaSelecionada = 0;
+    if (modalComentario) modalComentario.value = "";
+    if (modalSalvoMsg) modalSalvoMsg.textContent = "";
+    pintarEstrelas(0);
+    modal.classList.add("ativo");
+
+    // busca a avaliação salva (se houver) depois de abrir o modal, sem
+    // travar a exibição dos detalhes esperando o Firestore responder
+    if (usuarioAtual) {
+      const existente = await buscarAvaliacaoExistente(id, tipo);
+      if (existente) {
+        notaSelecionada = existente.nota;
+        if (modalComentario) modalComentario.value = existente.comentario || "";
+        pintarEstrelas(notaSelecionada);
+      }
     }
   }
 
-  function renderizarExplorar(lista) {
+  function fecharModal() {
+    modal.classList.remove("ativo");
+  }
+
+  if (modalOverlay) modalOverlay.addEventListener("click", fecharModal);
+  if (modalFechar) modalFechar.addEventListener("click", fecharModal);
+
+  // Fecha o modal ao apertar Esc
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modal.classList.contains("ativo")) {
+      fecharModal();
+    }
+  });
+
+  /* ===== BUSCA / CATÁLOGO ===== */
+  async function carregarPopulares() {
+    const url = `${TMDB_BASE}?path=trending/all/week&language=pt-BR`;
+    const resposta = await fetch(url);
+    const dados = await resposta.json();
+    listaAtual = dados.results.filter(item => item.media_type !== "person");
+    aplicarFiltros();
+  }
+
+  async function buscar(termo) {
+    const url = `${TMDB_BASE}?path=search/multi&language=pt-BR&query=${encodeURIComponent(termo)}`;
+    const resposta = await fetch(url);
+    const dados = await resposta.json();
+    listaAtual = dados.results.filter(item => item.media_type !== "person");
+    aplicarFiltros();
+  }
+
+  function aplicarFiltros() {
+    let lista = [...listaAtual];
+
+    if (filtroTipoAtual !== "todo") {
+      lista = lista.filter(item => {
+        const tipo = item.media_type === "tv" ? "serie" : "filme";
+        return tipo === filtroTipoAtual;
+      });
+    }
+
+    const generoSelecionado = selectGenero.value;
+    if (generoSelecionado !== "todos") {
+      lista = lista.filter(item => {
+        const tipo = item.media_type === "tv" ? "serie" : "filme";
+        return nomesGenerosDoItem(item, tipo).includes(generoSelecionado);
+      });
+    }
+
+    const ordem = selectOrdem.value;
+    if (ordem === "recentes") {
+      lista.sort((a, b) => new Date(b.release_date || b.first_air_date || 0) - new Date(a.release_date || a.first_air_date || 0));
+    } else if (ordem === "antigos") {
+      lista.sort((a, b) => new Date(a.release_date || a.first_air_date || 0) - new Date(b.release_date || b.first_air_date || 0));
+    } else if (ordem === "avaliados") {
+      lista.sort((a, b) => b.vote_average - a.vote_average);
+    }
+
+    lista = lista.filter(item => item.poster_path);
+
+    renderizarCards(lista);
+
+    if (contadorTitulos) {
+      contadorTitulos.textContent = `${lista.length} Título${lista.length === 1 ? "" : "s"}`;
+    }
+  }
+
+  function renderizarCards(lista) {
+    grid.innerHTML = "";
+    lista.forEach(item => {
+      const tipo = item.media_type === "tv" ? "serie" : "filme";
+      const nome = item.title || item.name;
+      const ano = (item.release_date || item.first_air_date || "").slice(0, 4);
+
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <div class="card__poster-wrap">
+          <img class="card__poster" src="https://image.tmdb.org/t/p/w300${item.poster_path}" alt="${nome}" loading="lazy">
+          <span class="card__selo">${tipo === "serie" ? "SÉRIE" : "FILME"}</span>
+        </div>
+        <div class="card__info">
+          <p class="card__titulo">${nome}</p>
+          <p class="card__meta">${ano}</p>
+          <p class="card__nota">★ ${item.vote_average.toFixed(1)}</p>
+        </div>
+      `;
+
+      card.addEventListener("click", () => abrirModal(item.id, tipo));
+      grid.appendChild(card);
+    });
+  }
+
+  /* ===== BUSCA: digitação (debounce), clique na lupa e Enter ===== */
+  const iconeBusca = document.querySelector(".header__search-icon");
+
+  function executarBusca() {
+    const termo = inputBusca.value.trim();
+    if (termo.length > 0) {
+      buscar(termo);
+    } else {
+      carregarPopulares();
+    }
+  }
+
+  if (inputBusca) {
+    inputBusca.addEventListener("input", () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        const termo = inputBusca.value.trim();
+        if (termo.length > 2) buscar(termo);
+        else carregarPopulares();
+      }, 400);
+    });
+
+    inputBusca.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        clearTimeout(timeout);
+        executarBusca();
+      }
+    });
+  }
+
+  if (iconeBusca) {
+    iconeBusca.addEventListener("click", () => {
+      clearTimeout(timeout);
+      executarBusca();
+    });
+  }
+
+  carregarGeneros();
+  carregarPopulares();
+  carregarExplorar();
+
+  /* ===== EXPLORAR FILMES E SÉRIES (carrossel) ===== */
+  async function carregarExplorar() {
     if (!explorarCarrossel) return;
+    const url = `${TMDB_BASE}?path=movie/top_rated&language=pt-BR`;
+    const resposta = await fetch(url);
+    const dados = await resposta.json();
+    const lista = dados.results.filter(item => item.poster_path);
+    renderizarExplorar(lista);
+  }
+
+  function renderizarExplorar(lista) {
     explorarCarrossel.innerHTML = "";
-    const frag = document.createDocumentFragment();
     lista.forEach(item => {
       const tipo = "filme";
-      const nome = item.title || "";
+      const nome = item.title;
       const ano = (item.release_date || "").slice(0, 4);
 
       const card = document.createElement("div");
       card.className = "card";
-
-      const posterWrap = document.createElement("div");
-      posterWrap.className = "card__poster-wrap";
-
-      const img = document.createElement("img");
-      img.className = "card__poster";
-      img.loading = "lazy";
-      img.src = item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : "/img/no-poster.png";
-      img.alt = nome;
-
-      const selo = document.createElement("span");
-      selo.className = "card__selo";
-      selo.textContent = "FILME";
-
-      posterWrap.appendChild(img);
-      posterWrap.appendChild(selo);
-
-      const info = document.createElement("div");
-      info.className = "card__info";
-
-      const tituloP = document.createElement("p");
-      tituloP.className = "card__titulo";
-      tituloP.textContent = nome;
-
-      const metaP = document.createElement("p");
-      metaP.className = "card__meta";
-      metaP.textContent = ano;
-
-      const notaP = document.createElement("p");
-      notaP.className = "card__nota";
-      notaP.textContent = `★ ${(item.vote_average || 0).toFixed(1)}`;
-
-      info.append(tituloP, metaP, notaP);
-      card.append(posterWrap, info);
+      card.innerHTML = `
+        <div class="card__poster-wrap">
+          <img class="card__poster" src="https://image.tmdb.org/t/p/w300${item.poster_path}" alt="${nome}" loading="lazy">
+          <span class="card__selo">FILME</span>
+        </div>
+        <div class="card__info">
+          <p class="card__titulo">${nome}</p>
+          <p class="card__meta">${ano}</p>
+          <p class="card__nota">★ ${item.vote_average.toFixed(1)}</p>
+        </div>
+      `;
 
       card.addEventListener("click", () => abrirModal(item.id, tipo));
-      frag.appendChild(card);
+      explorarCarrossel.appendChild(card);
     });
-
-    explorarCarrossel.appendChild(frag);
   }
 
   if (explorarNext) {
@@ -597,26 +397,28 @@ document.addEventListener("DOMContentLoaded", () => {
       explorarCarrossel.scrollBy({ left: 620, behavior: "smooth" });
     });
   }
+
   if (explorarPrev) {
     explorarPrev.addEventListener("click", () => {
       explorarCarrossel.scrollBy({ left: -620, behavior: "smooth" });
     });
   }
 
-  // --- FILTROS (Todo / Filmes / Séries) ---
+  /* ===== FILTROS (Todo / Filmes / Séries) ===== */
   botoesFiltro.forEach(botao => {
     botao.addEventListener("click", () => {
       botoesFiltro.forEach(b => b.classList.remove("filtro--ativo"));
       botao.classList.add("filtro--ativo");
-      filtroTipoAtual = botao.dataset.filtro || "todo";
+      filtroTipoAtual = botao.dataset.filtro;
       aplicarFiltros();
     });
   });
 
+  /* ===== SELECTS DE GÊNERO E ORDENAÇÃO ===== */
   if (selectGenero) selectGenero.addEventListener("change", aplicarFiltros);
   if (selectOrdem) selectOrdem.addEventListener("change", aplicarFiltros);
 
-  // --- LOGO RELOAD ---
+  /* ===== LOGO: se tiver busca, apaga; senão recarrega a página (F5) ===== */
   if (logoReload) {
     logoReload.addEventListener("click", () => {
       if (inputBusca && inputBusca.value.trim().length > 0) {
@@ -628,7 +430,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- MENU MOBILE ---
+  /* ===== MENU HAMBÚRGUER (mobile) ===== */
   function fecharMenuMobile() {
     if (headerMenu) headerMenu.classList.remove("aberto");
     if (btnMenuMobile) {
@@ -652,13 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  if (btnIrParaPerfil) {
-    btnIrParaPerfil.addEventListener("click", () => {
-      window.location.href = "/pages/editar.html";
-    });
-  }
-
-  // --- BANNER CARROSSEL ---
+  /* ===== CARROSSEL DO BANNER PRINCIPAL ===== */
   imagensBanner.forEach(src => {
     const preCarga = new Image();
     preCarga.src = src;
@@ -698,16 +494,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   dots.forEach(dot => {
     dot.addEventListener("click", () => {
-      mostrarSlide(Number(dot.dataset.index || 0));
+      mostrarSlide(Number(dot.dataset.index));
     });
   });
 
-  // --- VOLTAR AO TOPO ---
+  /* ===== BOTÃO VOLTAR AO TOPO ===== */
   const btnVoltarTopo = document.getElementById("btnVoltarTopo");
+
   if (btnVoltarTopo) {
     window.addEventListener("scroll", () => {
-      if (window.scrollY > 400) btnVoltarTopo.classList.add("visivel");
-      else btnVoltarTopo.classList.remove("visivel");
+      if (window.scrollY > 400) {
+        btnVoltarTopo.classList.add("visivel");
+      } else {
+        btnVoltarTopo.classList.remove("visivel");
+      }
     });
 
     btnVoltarTopo.addEventListener("click", () => {
@@ -715,109 +515,42 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- LOGIN GOOGLE & HEADER USUÁRIO ---
+  /* ===== LOGIN COM GOOGLE (Firebase Authentication) =====
+     Perfil (nome, foto, cor) fica salvo no Firestore, coleção "usuarios",
+     um documento por uid — é o perfil.js que lê/escreve os detalhes; aqui
+     no header a gente só precisa saber se tem alguém logado e mostrar o
+     nome/foto básicos vindos direto da conta Google. */
   const headerUser = document.getElementById("headerUser");
   const userAvatar = document.getElementById("userAvatar");
   const userNomeEl = document.getElementById("userNome");
-
-  function atualizarHeaderUsuario() {
-    const usuario = carregarUsuario();
-    if (usuario) {
-      const perfil = carregarPerfilLocal();
-      const fotoParaMostrar = (perfil && perfil.fotoManual && perfil.foto) ? perfil.foto : usuario.foto;
-      const nomeParaMostrar = (perfil && perfil.nomeManual && perfil.nome) ? perfil.nome : (usuario.nomeEditado || usuario.primeiroNome);
-
-      if (userAvatar) {
-        userAvatar.src = fotoParaMostrar;
-        userAvatar.classList.add("header__user-img--logado");
-      }
-      if (userNomeEl) userNomeEl.textContent = nomeParaMostrar;
-    } else {
-      if (userAvatar) {
-        userAvatar.src = "/svgs/user-icon.svg";
-        userAvatar.classList.remove("header__user-img--logado");
-      }
-      if (userNomeEl) userNomeEl.textContent = "";
-      fecharDropdownUsuario();
-    }
-  }
-
-  function decodificarJwt(token) {
-    try {
-      const payloadBase64 = token.split(".")[1];
-      const payloadJson = decodeURIComponent(
-        atob(payloadBase64.replace(/-/g, "+").replace(/_/g, "/"))
-          .split("")
-          .map(c => "%" + c.charCodeAt(0).toString(16).padStart(2, "0"))
-          .join("")
-      );
-      return JSON.parse(payloadJson);
-    } catch (err) {
-      console.error("Erro ao decodificar JWT:", err);
-      return {};
-    }
-  }
-
-  function aoLogarComGoogle(resposta) {
-    try {
-      const dados = decodificarJwt(resposta.credential);
-      const usuarioExistente = carregarUsuario();
-
-      const usuario = {
-        primeiroNome: dados.given_name || (dados.name ? dados.name.split(" ")[0] : "Usuário"),
-        nomeCompleto: dados.name || "",
-        email: dados.email || "",
-        foto: dados.picture || "/svgs/user-icon.svg",
-        nomeEditado: usuarioExistente ? usuarioExistente.nomeEditado : null
-      };
-
-      salvarUsuario(usuario);
-      atualizarHeaderUsuario();
-
-      const modalLoginAtual = document.getElementById("modalLogin");
-      if (modalLoginAtual) modalLoginAtual.classList.remove("ativo");
-    } catch (err) {
-      console.error("Erro no login com Google:", err);
-    }
-  }
+  const userDropdown = document.getElementById("userDropdown");
+  const btnVerPerfil = document.getElementById("btnVerPerfil");
+  const btnTrocarConta = document.getElementById("btnTrocarConta");
+  const btnSair = document.getElementById("btnSair");
 
   const modalLogin = document.getElementById("modalLogin");
   const modalLoginOverlay = document.getElementById("modalLoginOverlay");
   const modalLoginFechar = document.getElementById("modalLoginFechar");
-  const googleButtonContainer = document.getElementById("googleButtonContainer");
-  let googleJaInicializado = false;
-  let botaoGoogleJaRenderizado = false;
+  const btnEntrarGoogle = document.getElementById("btnEntrarGoogle");
 
   function abrirModalLogin() {
     if (modalLogin) modalLogin.classList.add("ativo");
-
-    if (window.google && google.accounts && google.accounts.id) {
-      if (!googleJaInicializado) {
-        google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: aoLogarComGoogle
-        });
-        googleJaInicializado = true;
-      }
-      if (!botaoGoogleJaRenderizado && googleButtonContainer) {
-        google.accounts.id.renderButton(googleButtonContainer, {
-          theme: "filled_black",
-          size: "large",
-          shape: "pill",
-          text: "signin_with"
-        });
-        botaoGoogleJaRenderizado = true;
-      }
-    } else {
-      if (googleButtonContainer) googleButtonContainer.textContent = "Carregando login do Google...";
-      setTimeout(abrirModalLogin, 300);
-    }
   }
 
   function fecharModalLogin() {
     if (modalLogin) modalLogin.classList.remove("ativo");
   }
 
+  async function fazerLoginComGoogle() {
+    try {
+      await signInWithPopup(auth, googleProvider);
+      fecharModalLogin();
+    } catch (erro) {
+      console.error("Erro no login com Google:", erro);
+    }
+  }
+
+  if (btnEntrarGoogle) btnEntrarGoogle.addEventListener("click", fazerLoginComGoogle);
   if (modalLoginOverlay) modalLoginOverlay.addEventListener("click", fecharModalLogin);
   if (modalLoginFechar) modalLoginFechar.addEventListener("click", fecharModalLogin);
 
@@ -827,30 +560,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- DROPDOWN USUÁRIO ---
-  const userDropdown = document.getElementById("userDropdown");
-  const btnVerPerfil = document.getElementById("btnVerPerfil");
-  const btnTrocarConta = document.getElementById("btnTrocarConta");
-  const btnSair = document.getElementById("btnSair");
-
+  /* ===== DROPDOWN DO USUÁRIO (Meu perfil / Trocar de conta / Sair) ===== */
   function fecharDropdownUsuario() {
     if (userDropdown) userDropdown.classList.remove("aberto");
   }
+
   function abrirDropdownUsuario() {
     if (userDropdown) userDropdown.classList.add("aberto");
-  }
-  function sairDaConta() {
-    try {
-      localStorage.removeItem(CHAVE_USUARIO);
-      usuarioCache = null;
-    } catch (err) {
-      console.error("Erro ao remover usuário:", err);
-    }
-    if (window.google && google.accounts && google.accounts.id) {
-      google.accounts.id.disableAutoSelect();
-    }
-    atualizarHeaderUsuario();
-    fecharDropdownUsuario();
   }
 
   if (btnVerPerfil) {
@@ -861,25 +577,26 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (btnSair) {
-    btnSair.addEventListener("click", (e) => {
+    btnSair.addEventListener("click", async (e) => {
       e.stopPropagation();
-      sairDaConta();
+      await signOut(auth);
+      fecharDropdownUsuario();
     });
   }
 
   if (btnTrocarConta) {
-    btnTrocarConta.addEventListener("click", (e) => {
+    btnTrocarConta.addEventListener("click", async (e) => {
       e.stopPropagation();
-      sairDaConta();
-      abrirModalLogin();
+      fecharDropdownUsuario();
+      await signOut(auth);
+      // o provider já força o seletor de contas (prompt: "select_account")
+      fazerLoginComGoogle();
     });
   }
 
   if (headerUser) {
-    headerUser.addEventListener("click", (e) => {
-      const usuario = carregarUsuario();
-      if (usuario) {
-        e.stopPropagation();
+    headerUser.addEventListener("click", () => {
+      if (usuarioAtual) {
         if (userDropdown && userDropdown.classList.contains("aberto")) {
           fecharDropdownUsuario();
         } else {
@@ -897,10 +614,47 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  atualizarHeaderUsuario();
+  // Busca o perfil salvo no Firestore (nome/foto editados manualmente) pra
+  // não mostrar sempre a foto crua do Google se a pessoa já personalizou
+  async function buscarPerfilFirestore(uid) {
+    try {
+      const snap = await getDoc(doc(db, "usuarios", uid));
+      return snap.exists() ? snap.data() : null;
+    } catch {
+      return null;
+    }
+  }
 
-  // --- Inicialização ---
-  carregarGeneros();
-  carregarPopulares();
-  carregarExplorar();
+  onAuthStateChanged(auth, async (user) => {
+    usuarioAtual = user;
+
+    if (!user) {
+      userAvatar.src = "/svgs/user-icon.svg";
+      userAvatar.classList.remove("header__user-img--logado");
+      userNomeEl.textContent = "";
+      fecharDropdownUsuario();
+      return;
+    }
+
+    // grava/atualiza os dados básicos do Google no Firestore, sem
+    // sobrescrever nome/foto que a pessoa já personalizou no perfil
+    const perfilExistente = await buscarPerfilFirestore(user.uid);
+    if (!perfilExistente) {
+      await setDoc(doc(db, "usuarios", user.uid), {
+        nome: user.displayName || "Usuário",
+        foto: user.photoURL || "/svgs/user-icon.svg",
+        cor: "#1c1a17",
+        email: user.email || "",
+        nomeManual: false,
+        fotoManual: false,
+        membroDesde: new Date().toISOString()
+      });
+    }
+
+    const perfil = perfilExistente || await buscarPerfilFirestore(user.uid);
+    userAvatar.src = (perfil && perfil.foto) ? perfil.foto : (user.photoURL || "/svgs/user-icon.svg");
+    userAvatar.classList.add("header__user-img--logado");
+    userNomeEl.textContent = (perfil && perfil.nome) ? perfil.nome : (user.displayName || "");
+  });
+
 });

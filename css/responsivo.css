@@ -87,8 +87,8 @@
 }
 
 .header__search-img {
-  width: 35px;
-  height: 35px;
+  width: 18px;
+  height: 18px;
   display: block;
 }
 
@@ -113,11 +113,7 @@
 
 .header__user {
   position: relative;
-  right: 10px;
-  top: 0;
 }
-
-
 
 .header__user-dropdown {
   position: absolute;
@@ -543,4 +539,30 @@
     width: 84px;
     height: 84px;
   }
+}
+
+/* =========================================================
+   BOTÃO "Continuar com Google" (agora somos nós que estilizamos,
+   antes era desenhado pelo próprio Google)
+   ========================================================= */
+.modal-login__botao {
+  min-height: 44px;
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #E7A33E;
+  color: #0a0a0a;
+  border: none;
+  border-radius: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.8rem 1.5rem;
+  transition: background 0.15s ease;
+}
+
+.modal-login__botao:hover {
+  background: #e4962f;
 }

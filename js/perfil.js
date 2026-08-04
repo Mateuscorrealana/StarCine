@@ -1,8 +1,21 @@
-document.addEventListener("DOMContentLoaded", () => {
+import { auth, db, googleProvider } from "/js/firebase-init.js";
+import {
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  deleteDoc
+} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 
-  const CHAVE_AVALIACOES = "starcine_avaliacoes"; // mesma chave usada no script.js da home
-  const CHAVE_PERFIL = "starcine_perfil";
-  const CHAVE_USUARIO = "starcine_usuario"; // mesma chave que o login do Google usa no script.js
+document.addEventListener("DOMContentLoaded", () => {
 
   const perfilFoto = document.getElementById("perfilFoto");
   const btnTrocarFoto = document.getElementById("btnTrocarFoto");
@@ -25,11 +38,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const headerMenu = document.getElementById("headerMenu");
   const MESES = ["jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez."];
 
-if (logoHome) {
-  logoHome.addEventListener("click", () => {
-    window.location.href = "/index.html";
-  });
-}
+  let usuarioAtual = null;
+  let perfilAtual = null;
+
+  if (logoHome) {
+    logoHome.addEventListener("click", () => {
+      window.location.href = "/index.html";
+    });
+  }
+
+  function formatarData(isoOuDate) {
+    const d = new Date(isoOuDate);
+    return `${String(d.getDate()).padStart(2, "0")} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+  }
 
   /* ===== MENU HAMBÚRGUER (mobile) ===== */
   function fecharMenuMobile() {
@@ -55,78 +76,155 @@ if (logoHome) {
     });
   }
 
-  function formatarData(isoOuDate) {
-    const d = new Date(isoOuDate);
-    return `${String(d.getDate()).padStart(2, "0")} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+  /* ===== LOGIN / DROPDOWN DO USUÁRIO (mesma lógica do script.js) ===== */
+  const headerUser = document.getElementById("headerUser");
+  const userAvatar = document.getElementById("userAvatar");
+  const userNomeEl = document.getElementById("userNome");
+  const userDropdown = document.getElementById("userDropdown");
+  const btnVerPerfil = document.getElementById("btnVerPerfil");
+  const btnTrocarConta = document.getElementById("btnTrocarConta");
+  const btnSair = document.getElementById("btnSair");
+
+  const modalLogin = document.getElementById("modalLogin");
+  const modalLoginOverlay = document.getElementById("modalLoginOverlay");
+  const modalLoginFechar = document.getElementById("modalLoginFechar");
+  const btnEntrarGoogle = document.getElementById("btnEntrarGoogle");
+
+  function abrirModalLogin() {
+    if (modalLogin) modalLogin.classList.add("ativo");
   }
 
-  /* ===== USUÁRIO LOGADO PELO GOOGLE (lido da mesma chave do script.js) ===== */
-  function carregarUsuarioGoogle() {
+  function fecharModalLogin() {
+    if (modalLogin) modalLogin.classList.remove("ativo");
+  }
+
+  async function fazerLoginComGoogle() {
     try {
-      return JSON.parse(localStorage.getItem(CHAVE_USUARIO));
-    } catch {
-      return null;
+      await signInWithPopup(auth, googleProvider);
+      fecharModalLogin();
+    } catch (erro) {
+      console.error("Erro no login com Google:", erro);
     }
   }
 
-  /* ===== PERFIL (nome, foto, cor do card, data em que criou a conta) =====
-     Guardado em "starcine_perfil": { nome, foto (base64), cor, membroDesde (ISO),
-     nomeManual, fotoManual }
-     "nomeManual"/"fotoManual" ficam true assim que a pessoa edita esses campos
-     manualmente na página de perfil — a partir daí paramos de sobrescrever
-     com os dados do Google automaticamente.
-     Na primeira vez que essa página é aberta, a data de "membro desde" é
-     gravada e nunca mais muda. */
-  function carregarPerfil() {
-    let perfil;
-    try {
-      perfil = JSON.parse(localStorage.getItem(CHAVE_PERFIL));
-    } catch {
-      perfil = null;
+  if (btnEntrarGoogle) btnEntrarGoogle.addEventListener("click", fazerLoginComGoogle);
+  if (modalLoginOverlay) modalLoginOverlay.addEventListener("click", fecharModalLogin);
+  if (modalLoginFechar) modalLoginFechar.addEventListener("click", fecharModalLogin);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modalLogin && modalLogin.classList.contains("ativo")) {
+      fecharModalLogin();
     }
+  });
 
-    const usuarioGoogle = carregarUsuarioGoogle();
+  function fecharDropdownUsuario() {
+    if (userDropdown) userDropdown.classList.remove("aberto");
+  }
 
-    if (!perfil) {
-      perfil = {
-        nome: usuarioGoogle ? (usuarioGoogle.nomeEditado || usuarioGoogle.primeiroNome) : "Usuário",
-        foto: usuarioGoogle ? usuarioGoogle.foto : null,
-        cor: "#1c1a17",
-        membroDesde: new Date().toISOString(),
-        nomeManual: false,
-        fotoManual: false
+  function abrirDropdownUsuario() {
+    if (userDropdown) userDropdown.classList.add("aberto");
+  }
+
+  if (btnVerPerfil) {
+    btnVerPerfil.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fecharDropdownUsuario();
+    });
+  }
+
+  if (btnSair) {
+    btnSair.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await signOut(auth);
+      fecharDropdownUsuario();
+      window.location.href = "/index.html";
+    });
+  }
+
+  if (btnTrocarConta) {
+    btnTrocarConta.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      fecharDropdownUsuario();
+      await signOut(auth);
+      fazerLoginComGoogle();
+    });
+  }
+
+  if (headerUser) {
+    headerUser.addEventListener("click", () => {
+      if (usuarioAtual) {
+        if (userDropdown && userDropdown.classList.contains("aberto")) {
+          fecharDropdownUsuario();
+        } else {
+          abrirDropdownUsuario();
+        }
+      } else {
+        abrirModalLogin();
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!headerUser.contains(e.target)) {
+        fecharDropdownUsuario();
+      }
+    });
+  }
+
+  /* ===== REDIMENSIONAR FOTO ANTES DE SALVAR =====
+     Encolhe a imagem pra no máximo 300px no lado maior antes de converter
+     pra base64 — mantém o documento do Firestore pequeno (limite de 1MB
+     por documento) e o upload rápido. */
+  function redimensionarImagem(arquivo, tamanhoMax = 300, qualidade = 0.82) {
+    return new Promise((resolve, reject) => {
+      const leitor = new FileReader();
+      leitor.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > height && width > tamanhoMax) {
+            height = Math.round(height * (tamanhoMax / width));
+            width = tamanhoMax;
+          } else if (height >= width && height > tamanhoMax) {
+            width = Math.round(width * (tamanhoMax / height));
+            height = tamanhoMax;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", qualidade));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
       };
-      localStorage.setItem(CHAVE_PERFIL, JSON.stringify(perfil));
-      return perfil;
-    }
-
-    // perfil já existia: sincroniza com o Google só nos campos que a
-    // pessoa ainda não editou manualmente
-    if (usuarioGoogle) {
-      let mudou = false;
-      const nomeGoogle = usuarioGoogle.nomeEditado || usuarioGoogle.primeiroNome;
-
-      if (!perfil.nomeManual && nomeGoogle && perfil.nome !== nomeGoogle) {
-        perfil.nome = nomeGoogle;
-        mudou = true;
-      }
-      if (!perfil.fotoManual && usuarioGoogle.foto && perfil.foto !== usuarioGoogle.foto) {
-        perfil.foto = usuarioGoogle.foto;
-        mudou = true;
-      }
-      if (mudou) localStorage.setItem(CHAVE_PERFIL, JSON.stringify(perfil));
-    }
-
-    return perfil;
+      leitor.onerror = reject;
+      leitor.readAsDataURL(arquivo);
+    });
   }
 
-  function salvarPerfil(perfil) {
-    localStorage.setItem(CHAVE_PERFIL, JSON.stringify(perfil));
+  /* ===== PERFIL (Firestore: coleção "usuarios", documento = uid) ===== */
+  async function buscarOuCriarPerfil(user) {
+    const ref = doc(db, "usuarios", user.uid);
+    const snap = await getDoc(ref);
+
+    if (snap.exists()) {
+      return { ref, dados: snap.data() };
+    }
+
+    const novo = {
+      nome: user.displayName || "Usuário",
+      foto: user.photoURL || "/svgs/user-icon.svg",
+      cor: "#1c1a17",
+      email: user.email || "",
+      nomeManual: false,
+      fotoManual: false,
+      membroDesde: new Date().toISOString()
+    };
+    await setDoc(ref, novo);
+    return { ref, dados: novo };
   }
 
-  let perfil = carregarPerfil();
-
-  function aplicarPerfilNaTela() {
+  function aplicarPerfilNaTela(perfil) {
     perfilNome.textContent = perfil.nome;
     perfilNomeLista.textContent = perfil.nome;
     perfilMembroDesde.textContent = formatarData(perfil.membroDesde);
@@ -134,33 +232,65 @@ if (logoHome) {
     perfilBio.style.background = perfil.cor;
     inputNome.value = perfil.nome;
     inputCor.value = perfil.cor;
+
+    if (userAvatar) {
+      userAvatar.src = perfil.foto || "/svgs/user-icon.svg";
+      userAvatar.classList.add("header__user-img--logado");
+    }
+    if (userNomeEl) userNomeEl.textContent = perfil.nome;
   }
 
-  aplicarPerfilNaTela();
+  function mostrarEstadoDeslogado() {
+    perfilNome.textContent = "Visitante";
+    perfilNomeLista.textContent = "Visitante";
+    perfilMembroDesde.textContent = "—";
+    perfilFoto.src = "/svgs/user-icon.svg";
+    perfilBio.style.background = "#1c1a17";
+    statAvaliacoes.textContent = "0";
+    statMedia.textContent = "0";
+    listaAvaliacoes.innerHTML = `<p class="perfil-avaliacoes__vazio">Faça login pra ver e salvar suas avaliações.</p>`;
+
+    if (userAvatar) {
+      userAvatar.src = "/svgs/user-icon.svg";
+      userAvatar.classList.remove("header__user-img--logado");
+    }
+    if (userNomeEl) userNomeEl.textContent = "";
+  }
 
   /* ===== TROCAR FOTO DE PERFIL ===== */
   if (btnTrocarFoto) {
-    btnTrocarFoto.addEventListener("click", () => inputFoto.click());
+    btnTrocarFoto.addEventListener("click", () => {
+      if (!usuarioAtual) {
+        abrirModalLogin();
+        return;
+      }
+      inputFoto.click();
+    });
   }
 
   if (inputFoto) {
-    inputFoto.addEventListener("change", () => {
+    inputFoto.addEventListener("change", async () => {
       const arquivo = inputFoto.files[0];
-      if (!arquivo) return;
+      if (!arquivo || !usuarioAtual) return;
 
-      const leitor = new FileReader();
-      leitor.onload = () => {
-        perfil.foto = leitor.result; // salva a imagem em base64
-        perfil.fotoManual = true; // a partir daqui não sobrescreve mais com a foto do Google
-        salvarPerfil(perfil);
-        perfilFoto.src = perfil.foto;
-      };
-      leitor.readAsDataURL(arquivo);
+      try {
+        const fotoBase64 = await redimensionarImagem(arquivo);
+        const ref = doc(db, "usuarios", usuarioAtual.uid);
+        perfilAtual = { ...perfilAtual, foto: fotoBase64, fotoManual: true };
+        await setDoc(ref, perfilAtual, { merge: true });
+        aplicarPerfilNaTela(perfilAtual);
+      } catch (erro) {
+        console.error("Erro ao trocar foto:", erro);
+      }
     });
   }
 
   /* ===== PAINEL DE EDIÇÃO (nome + cor do card) ===== */
   function alternarPainel() {
+    if (!usuarioAtual) {
+      abrirModalLogin();
+      return;
+    }
     painelEditar.classList.toggle("ativo");
   }
 
@@ -168,32 +298,40 @@ if (logoHome) {
   if (btnEditarHeader) btnEditarHeader.addEventListener("click", alternarPainel);
 
   if (btnSalvarPerfil) {
-    btnSalvarPerfil.addEventListener("click", () => {
-      perfil.nome = inputNome.value.trim() || "Usuário";
-      perfil.cor = inputCor.value;
-      perfil.nomeManual = true; // a partir daqui não sobrescreve mais com o nome do Google
-      salvarPerfil(perfil);
-      aplicarPerfilNaTela();
-      painelEditar.classList.remove("ativo");
+    btnSalvarPerfil.addEventListener("click", async () => {
+      if (!usuarioAtual) return;
+
+      const ref = doc(db, "usuarios", usuarioAtual.uid);
+      perfilAtual = {
+        ...perfilAtual,
+        nome: inputNome.value.trim() || "Usuário",
+        cor: inputCor.value,
+        nomeManual: true
+      };
+
+      try {
+        await setDoc(ref, perfilAtual, { merge: true });
+        aplicarPerfilNaTela(perfilAtual);
+        painelEditar.classList.remove("ativo");
+      } catch (erro) {
+        console.error("Erro ao salvar perfil:", erro);
+      }
     });
   }
 
-
-  /* ===== AVALIAÇÕES (lidas da mesma chave usada na home) ===== */
-  function carregarAvaliacoes() {
-    try {
-      return JSON.parse(localStorage.getItem(CHAVE_AVALIACOES)) || [];
-    } catch {
-      return [];
-    }
+  /* ===== AVALIAÇÕES (Firestore: coleção "avaliacoes", filtradas por uid) ===== */
+  async function carregarAvaliacoes(uid) {
+    const q = query(collection(db, "avaliacoes"), where("uid", "==", uid));
+    const snap = await getDocs(q);
+    const lista = [];
+    snap.forEach(docSnap => lista.push({ id: docSnap.id, ...docSnap.data() }));
+    return lista.sort((a, b) => new Date(b.data) - new Date(a.data));
   }
 
-  function salvarAvaliacoes(lista) {
-    localStorage.setItem(CHAVE_AVALIACOES, JSON.stringify(lista));
-  }
+  async function renderizarAvaliacoes() {
+    if (!usuarioAtual) return;
 
-  function renderizarAvaliacoes() {
-    const avaliacoes = carregarAvaliacoes().sort((a, b) => new Date(b.data) - new Date(a.data));
+    const avaliacoes = await carregarAvaliacoes(usuarioAtual.uid);
 
     statAvaliacoes.textContent = avaliacoes.length;
 
@@ -216,7 +354,7 @@ if (logoHome) {
           <span class="avaliacao-item__estrelas">${"★".repeat(av.nota)}${"☆".repeat(5 - av.nota)}</span>
           <p class="avaliacao-item__titulo">${av.nome}</p>
           <p class="avaliacao-item__comentario">${av.comentario ? av.comentario : "Sem comentário."}</p>
-          <button class="avaliacao-item__remover" data-id="${av.id}" data-tipo="${av.tipo}">Remover avaliação</button>
+          <button class="avaliacao-item__remover" data-doc-id="${av.id}">Remover avaliação</button>
         </div>
         <span class="avaliacao-item__data">${formatarData(av.data)}</span>
       `;
@@ -224,16 +362,36 @@ if (logoHome) {
     });
 
     listaAvaliacoes.querySelectorAll(".avaliacao-item__remover").forEach(botao => {
-      botao.addEventListener("click", () => {
-        const id = Number(botao.dataset.id);
-        const tipo = botao.dataset.tipo;
-        const novaLista = carregarAvaliacoes().filter(a => !(a.id === id && a.tipo === tipo));
-        salvarAvaliacoes(novaLista);
-        renderizarAvaliacoes();
+      botao.addEventListener("click", async () => {
+        const docId = botao.dataset.docId;
+        try {
+          await deleteDoc(doc(db, "avaliacoes", docId));
+          renderizarAvaliacoes();
+        } catch (erro) {
+          console.error("Erro ao remover avaliação:", erro);
+        }
       });
     });
   }
 
-  renderizarAvaliacoes();
+  /* ===== ESTADO DE LOGIN (Firebase Authentication) ===== */
+  onAuthStateChanged(auth, async (user) => {
+    usuarioAtual = user;
+
+    if (!user) {
+      perfilAtual = null;
+      mostrarEstadoDeslogado();
+      return;
+    }
+
+    try {
+      const { dados } = await buscarOuCriarPerfil(user);
+      perfilAtual = dados;
+      aplicarPerfilNaTela(perfilAtual);
+      renderizarAvaliacoes();
+    } catch (erro) {
+      console.error("Erro ao carregar perfil:", erro);
+    }
+  });
 
 });

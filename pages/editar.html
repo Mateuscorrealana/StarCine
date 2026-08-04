@@ -40,12 +40,30 @@
           <button id="btnEditarHeader">Editar Perfil</button>
         </div>
 
-        <div class="header__user">
-          <img src="/svgs/user-icon.svg" alt="Ícone de usuário" class="header__user-img" />
+        <div class="header__user" id="headerUser">
+          <img src="/svgs/user-icon.svg" alt="Ícone de usuário" class="header__user-img" id="userAvatar" />
+          <span class="header__user-nome" id="userNome"></span>
+
+          <div class="header__user-dropdown" id="userDropdown">
+            <button id="btnVerPerfil" type="button">Meu perfil</button>
+            <button id="btnTrocarConta" type="button">Trocar de conta</button>
+            <button id="btnSair" type="button">Sair</button>
+          </div>
         </div>
       </div>
     </div>
   </header>
+
+  <div class="modal-login" id="modalLogin">
+    <div class="modal-login__overlay" id="modalLoginOverlay"></div>
+    <div class="modal-login__conteudo">
+      <button class="modal-login__fechar" id="modalLoginFechar" aria-label="Fechar">&times;</button>
+      <p class="modal-login__titulo">Entrar no StarCine</p>
+      <button id="btnEntrarGoogle" class="modal-login__botao" type="button">
+        Continuar com Google
+      </button>
+    </div>
+  </div>
 
   <!-- Card de bio -->
   <section class="perfil-bio" id="perfilBio">
@@ -151,7 +169,7 @@
     </div>
   </footer>
 
-  <script src="/js/script.js"></script>
+  <script type="module" src="/js/perfil.js"></script>
 </body>
 
 </html>
