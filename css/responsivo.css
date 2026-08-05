@@ -210,6 +210,14 @@
   transform: translateY(-8px) rotate(-45deg);
 }
 
+
+@media (max-width: 1440px) {
+  .dots {
+    display: none;
+  }
+}
+
+
 /* =========================================================
    1200px — catálogo com uma coluna a menos
    ========================================================= */
@@ -229,6 +237,7 @@
 
   .dots {
     bottom: 160px;
+    display: none;
   }
 
   .footer__container {
