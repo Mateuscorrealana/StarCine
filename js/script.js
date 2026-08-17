@@ -60,10 +60,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let indiceAtual = 0;
 
   const imagensBanner = [
-    "/img-principal(1).webp",
-    "/img-principal2.webp",
-    "/img-principal3.webp",
-    "/img-principal4.webp",
+    "/img-principal/img-principal (1).webp",
+    "/img-principal/img-principal2.webp",
+    "/img-principal/img-principal3.webp",
+    "/img-principal/img-principal4.webp",
   ];
 
   /* ===== GÊNEROS (popula o select) ===== */
