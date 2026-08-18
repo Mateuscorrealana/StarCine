@@ -211,9 +211,14 @@
 }
 
 
-@media (max-width: 1440px) {
+/* dots visíveis só em telas desktop grandes (ex: seu monitor 1920x1080) */
+.dots {
+  visibility: hidden;
+}
+
+@media (min-width: 1441px) {
   .dots {
-    display: none;
+    visibility: visible;
   }
 }
 
@@ -237,7 +242,6 @@
 
   .dots {
     bottom: 160px;
-    display: none;
   }
 
   .footer__container {
