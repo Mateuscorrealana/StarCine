@@ -30,7 +30,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const logoReload = document.getElementById("logoReload");
   const imgPrincipal = document.getElementById("imgPrincipal");
-  const dots = document.querySelectorAll("#dots span");
   const btnNext = document.getElementById("btnNext");
   const btnPrev = document.getElementById("btnPrev");
   const modal = document.getElementById("modal");
@@ -472,10 +471,6 @@ document.addEventListener("DOMContentLoaded", () => {
       imgPrincipal.classList.remove("card-principal__img--trocando");
       trocandoSlide = false;
     }, 150);
-
-    dots.forEach(dot => dot.classList.remove("active"));
-    if (dots[indice]) dots[indice].classList.add("active");
-    indiceAtual = indice;
   }
 
   if (btnNext) {
@@ -491,12 +486,6 @@ document.addEventListener("DOMContentLoaded", () => {
       mostrarSlide(anterior);
     });
   }
-
-  dots.forEach(dot => {
-    dot.addEventListener("click", () => {
-      mostrarSlide(Number(dot.dataset.index));
-    });
-  });
 
   /* ===== BOTÃO VOLTAR AO TOPO ===== */
   const btnVoltarTopo = document.getElementById("btnVoltarTopo");
