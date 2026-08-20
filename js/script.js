@@ -475,15 +475,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (btnNext) {
     btnNext.addEventListener("click", () => {
-      const proximo = (indiceAtual + 1) % imagensBanner.length;
-      mostrarSlide(proximo);
+      indiceAtual = (indiceAtual + 1) % imagensBanner.length;
+      mostrarSlide(indiceAtual);
     });
   }
 
   if (btnPrev) {
     btnPrev.addEventListener("click", () => {
-      const anterior = (indiceAtual - 1 + imagensBanner.length) % imagensBanner.length;
-      mostrarSlide(anterior);
+      indiceAtual = (indiceAtual - 1 + imagensBanner.length) % imagensBanner.length;
+      mostrarSlide(indiceAtual);
     });
   }
 
